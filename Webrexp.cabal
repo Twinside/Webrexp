@@ -8,7 +8,7 @@ Author: Vincent Berthoux
 Maintainer: Vincent Berthoux
 
 Executable webrexp
-    Main-Is: webrexp.hs
+    Main-Is: src/webrexp.hs
     Build-Depends: base >= 2.0,
                    HTTP >= 4000.1.1 && < 4000.2,
                    hxt >= 9.0.1 && < 9.1
