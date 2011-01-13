@@ -1,0 +1,6 @@
+*.swp
+._DS_STORE
+dist
+*.o
+*.hi
+

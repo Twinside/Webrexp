@@ -1,0 +1,15 @@
+Name:       Webrexp
+Version:    0.1
+Synopsis:   Regexp-like engine to scrap web data
+Build-Type: Simple
+Cabal-Version: >= 1.2
+Description: The intent of this project is to provide a DSL (just an expression language) to be able to write one-liner to scrap web data
+Author: Vincent Berthoux
+Maintainer: Vincent Berthoux
+
+Executable webrexp
+    Main-Is: webrexp.hs
+    Build-Depends: base >= 2.0,
+                   HTTP >= 4000.1.1 && < 4000.2,
+                   hxt >= 9.0.1 && < 9.1
+
