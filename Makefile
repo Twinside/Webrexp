@@ -10,3 +10,6 @@ clean:
 
 run:
 	runhaskell parserTest.hs
+
+test:
+	runhaskell downloadTest.hs -package bytestring -package network -package http

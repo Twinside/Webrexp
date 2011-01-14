@@ -29,7 +29,7 @@ instance Applicative WebContext where
 
 instance Monad WebContext where
     {-# INLINE return #-}
-    return = WebContext $ \c -> (c, a)
+    return a = WebContext $ \c -> (c, a)
 
     {-# INLINE (>>=) #-}
     (WebContext m) >>= f =
