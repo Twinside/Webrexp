@@ -8,3 +8,5 @@ conf:
 clean:
 	runhaskell Setup.hs clean
 
+run:
+	runhaskell parserTest.hs
