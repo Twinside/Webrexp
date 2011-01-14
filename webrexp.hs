@@ -1,9 +1,8 @@
-import Control.Monad
 import System.Environment
 import Text.Parsec
 
-import Webrexp.Exprtypes
 import Webrexp.Parser
+import Webrexp.WebContext
 
 main :: IO ()
 main = do

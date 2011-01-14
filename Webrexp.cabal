@@ -9,6 +9,7 @@ Maintainer: Vincent Berthoux
 
 Executable webrexp
     Main-Is: webrexp.hs
+    Ghc-Options: -Wall
     Build-Depends: base >= 2.0, mtl,
                    HTTP >= 4000.1.1 && < 4000.2,
                    hxt >= 9.0.1 && < 9.1,

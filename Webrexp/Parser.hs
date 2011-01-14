@@ -76,7 +76,7 @@ operatorDefs =
 noderange :: Parsed st NodeRange
 noderange = do
     n <- fromInteger <$> natural
-    (do char '-' 
+    (do _ <- char '-' 
         m <- fromInteger <$> natural
         return $ Interval n m) <|> return (Index n)
 
