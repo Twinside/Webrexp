@@ -8,9 +8,9 @@ Design
 ------
 
     rootpage = http://feoaijfoieajfe.com
-    next = rootpage (> (div.comic-pane img {.}; div.nav-next a))+
+    next = rootpage ((div.comic-pane img {.}; div.nav-next a) >)+
     
-    next = rootpage (> (div.comic-pane img {@width = 3; .}; div.nav-next a))+
+    next = rootpage > ((div.comic-pane img {@width = 3; .}; div.nav-next a) >)+
     
     
     next = rootpage > div | span |[4] ..
@@ -27,3 +27,7 @@ Design
  * | : Select next element in dom
  * < : Select upper element
  
+
+Expression grammar
+------------------
+

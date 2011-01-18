@@ -1,4 +1,10 @@
-module Webrexp.Exprtypes where
+module Webrexp.Exprtypes
+    ( WebRef (..)
+    , NodeRange (..)
+    , Op (..)
+    , ActionExpr (..)
+    , WebRexp (..)
+    ) where
 
 -- | represent an element
 data WebRef =

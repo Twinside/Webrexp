@@ -1,4 +1,6 @@
-module Webrexp.GraphWalker where
+module Webrexp.GraphWalker
+    ( GraphWalker(..)
+    ) where
 
 -- | The aim of this typeclass is to permit
 -- the use of different html/xml parser if

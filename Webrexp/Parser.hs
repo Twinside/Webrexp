@@ -1,4 +1,7 @@
-module Webrexp.Parser where
+module Webrexp.Parser
+    ( webRexpParser 
+    , Parsed
+    ) where
 
 import Control.Applicative( (<$>), (<*), (<$) )
 import Control.Monad.Identity
@@ -9,6 +12,11 @@ import Text.Parsec.Expr
 import Text.Parsec
 import Text.Parsec.Language( haskellStyle )
 import qualified Text.Parsec.Token as P
+
+-- | Parser used to parse a webrexp.
+-- Use just like any Parsec 3.0 parser.
+webRexpParser :: Parsed st WebRexp
+webRexpParser = webrexp 
 
 -----------------------------------------------------------
 --          Lexing defs
@@ -22,13 +30,16 @@ natural = P.natural lexer
 stringLiteral :: Parsed st String
 stringLiteral = P.stringLiteral lexer
 
-parens :: ParsecT String u Identity a -> ParsecT String u Identity a
+parens :: ParsecT String u Identity a 
+       -> ParsecT String u Identity a
 parens = P.parens lexer
 
-braces :: ParsecT String u Identity a -> ParsecT String u Identity a
+braces :: ParsecT String u Identity a 
+       -> ParsecT String u Identity a
 braces = P.braces lexer
 
-brackets :: ParsecT String u Identity a -> ParsecT String u Identity a
+brackets :: ParsecT String u Identity a 
+         -> ParsecT String u Identity a
 brackets = P.brackets lexer
 
 whiteSpace :: Parsed st ()
@@ -171,8 +182,8 @@ spaceSurrounded p = do
 binary :: String -> (a -> a -> a) -> Assoc -> Operator String st Identity a
 binary name fun = Infix (do{ reservedOp name; return fun })
 
-prefix :: String -> (a -> a) -> Operator String st Identity a
-prefix  name fun       = Prefix (do{ reservedOp name; return fun })
+{-prefix :: String -> (a -> a) -> Operator String st Identity a-}
+{-prefix  name fun = Prefix (do{ reservedOp name; return fun })-}
 
 postfix :: String -> (a -> a) -> Operator String st Identity a
 postfix name fun = Postfix (do{ reservedOp name; return fun })

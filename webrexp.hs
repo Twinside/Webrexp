@@ -2,12 +2,12 @@ import System.Environment
 import Text.Parsec
 
 import Webrexp.Parser
-import Webrexp.WebContext
+import Webrexp.Eval()
 
 main :: IO ()
 main = do
     args <- getArgs
     file <- readFile $ args !! 1
-    print $ runParser webrexp () (args !! 1) file
+    print $ runParser webRexpParser () (args !! 1) file
     return ()
 
