@@ -11,6 +11,7 @@ module Webrexp.WebContext
 
     , pushCurrentState 
     , popCurrentState 
+    , getEvalState 
     , setEvalState 
     )
     where
@@ -123,6 +124,10 @@ setEvalState :: (Monad m)
              => EvalState node -> WebContextT node m ()
 setEvalState st = WebContextT $ \c ->
     return ((), c { currentNodes = st })
+
+getEvalState :: (Monad m) => WebContextT node m (EvalState node)
+getEvalState = WebContextT $ \c ->
+    return (currentNodes c, c)
 
 -- | Map operation performing it only if the evaluation
 -- state is a list of nodes.

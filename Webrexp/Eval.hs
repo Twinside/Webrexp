@@ -43,6 +43,32 @@ applyFunTillFalse f isTail obj = do
     if valid then applyFunTillFalse f isTail obj
              else return False
 
+filterNodes :: [NodeRange] -> WebCrawler node Bool
+filterNodes ranges = getEvalState >>= \state ->
+    case state of
+         None -> return False
+         Strings s -> setEvalState (Strings $ filtered s)
+                   >> return True
+         Nodes n -> setEvalState (Nodes $ filtered n)
+                 >> return True
+         Blob b -> setEvalState (Blob $ filtered b)
+                >> return True
+      where filtered = discardLockstep ranges . zip [0..]
+            discardLockstep [] _  = []
+            discardLockstep _  [] = []
+            discardLockstep rlist@(Index i:xs) elist@((i2,e):ys)
+                | i2 == i = e : discardLockstep xs ys
+                | i2 < i = discardLockstep rlist ys
+                -- i2 > i (should not arrise in practice)
+                | otherwise = discardLockstep xs elist
+            discardLockstep rlist@(Interval a b:xs) elist@((i,e):ys)
+                | i < a = discardLockstep rlist ys
+                -- i >= a
+                | i < b = e : discardLockstep rlist ys
+                | i == b = e : discardLockstep xs ys
+                -- i > b
+                | otherwise = discardLockstep xs elist
+
 
 -- | Evaluate an expression while it's still valid.
 -- @param@ isTail Tell if the list is from a tail node
@@ -50,9 +76,14 @@ evalListTillFalse :: (GraphWalker node)
                   => Bool -> [WebRexp] -> WebCrawler node Bool
 evalListTillFalse = applyFunTillFalse evalList
 
+-- | repeatidly eval the webrexp until a false is returned.
 evalTillFalse :: (GraphWalker node)
               => Bool -> WebRexp -> WebCrawler node Bool
 evalTillFalse = applyFunTillFalse evalWebRexp
+
+evalAction :: (GraphWalker node)
+           => ActionExpr -> WebCrawler node Bool
+evalAction _ = return False
 
 -- | Evaluate an expression, the boolean is here to propagate
 -- the idea of 'tail' call, if we are at the tail of the expression
@@ -74,20 +105,25 @@ evalWebRexp isTail (Plus subs) = do
                     return True
             else return False
 
-evalWebRexp _ DiggLink =
-    return False
-evalWebRexp _ (Unique _subs) = -- WebRexp
-    return False
-
 evalWebRexp _ (Str str) = do
     setEvalState $ Strings [str]
     return True
 
-evalWebRexp _ (Action _subs) = -- ActionExpr
-    return False
-evalWebRexp _ (Range _subs) = -- [NodeRange]
-    return False
+evalWebRexp _ (Action action) =
+    evalAction action
+    
+evalWebRexp _ (Unique _subs) = -- WebRexp
+    error "Unimplemented - Unique (webrexp)"
+    -- return False
+
 evalWebRexp _ (Ref _subs) = -- WebRef
+    return False
+
+evalWebRexp _ (Range subs) = do
+    _ <- filterNodes subs
+    return True
+
+evalWebRexp _ DiggLink =
     return False
 
 evalWebRexp _ NextSibling = do
