@@ -6,6 +6,8 @@ module Webrexp.GraphWalker
 -- the use of different html/xml parser if
 -- if the first one is found to be bad. All
 -- the logic should use this interface.
+--
+-- Minimal implementation : attribOf, childrenOf, valueOf
 class GraphWalker a where
     -- | Get back an attribute of the node
     -- if it exists
@@ -17,7 +19,12 @@ class GraphWalker a where
 
     -- | Given a tag and a name, retrieve
     -- the first matching tags in the hierarchy.
-    findNamed :: a -> String -> [a]
+    -- It must return the list of ancestors permitting
+    -- the acess to the path used to find children
+    --
+    -- the returned list must contain :
+    --
+    findNamed :: a -> String -> [(a, [(a, Int)])]
 
     -- | Retrieve the value of the tag (textual)
     valueOf :: a -> String

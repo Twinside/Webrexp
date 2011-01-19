@@ -85,6 +85,21 @@ evalAction :: (GraphWalker node)
            => ActionExpr -> WebCrawler node Bool
 evalAction _ = return False
 
+searchRefIn :: (GraphWalker node)
+            => WebRef -> [NodeContext node] -> [NodeContext node]
+searchRefIn ref = concatMap (searchRef ref)
+  where searchRef (Elem s) n =
+            [ NodeContext {
+                parents = subP ++ parents n,
+                this = sub
+              }  | (sub, subP) <- findNamed (this n) s]
+        searchRef (OfClass r s) n = 
+            [n | v <- searchRef r n, attribOf (this v) "class" == Just s]
+        searchRef (Attrib  r s) n =
+            [n | v <- searchRef r n, attribOf (this v) s /= Nothing]
+        searchRef (OfName  r s) n =
+            [n | v <- searchRef r n, attribOf (this v) "name" == Just s]
+
 -- | Evaluate an expression, the boolean is here to propagate
 -- the idea of 'tail' call, if we are at the tail of the expression
 -- we can discard some elements safely and thus reduce memory
@@ -116,8 +131,13 @@ evalWebRexp _ (Unique _subs) = -- WebRexp
     error "Unimplemented - Unique (webrexp)"
     -- return False
 
-evalWebRexp _ (Ref _subs) = -- WebRef
-    return False
+evalWebRexp _ (Ref ref) = getEvalState >>= \st ->
+    case st of
+         Nodes ns -> do
+             setEvalState . Nodes $ searchRefIn ref ns
+             hasNodeLeft
+         _ -> do setEvalState None
+                 return False
 
 evalWebRexp _ (Range subs) = do
     _ <- filterNodes subs
