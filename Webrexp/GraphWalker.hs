@@ -10,7 +10,7 @@ import Webrexp.ResourcePath
 -- if the first one is found to be bad. All
 -- the logic should use this interface.
 --
--- Minimal implementation : attribOf, childrenOf, valueOf
+-- Minimal implementation : accessGraph, attribOf, childrenOf, valueOf
 class GraphWalker a where
     -- | Get back an attribute of the node
     -- if it exists
