@@ -173,9 +173,9 @@ downLinks path = do
     down <- liftIO $ accessGraph path
     case down of
          Nothing -> return Nothing
-         Just n -> return . Just $
+         Just (u,n) -> return . Just $
                     NodeContext { parents = []
-         	                    , rootRef = path
+         	                    , rootRef = u
          	                    , this = n }
 
 diggLinks :: (GraphWalker node) => EvalState node -> WebCrawler node Bool
