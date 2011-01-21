@@ -1,9 +1,12 @@
 module Webrexp.Exprtypes
-    ( WebRef (..)
+    ( 
+    -- * Types
+      WebRef (..)
     , NodeRange (..)
     , Op (..)
     , ActionExpr (..)
     , WebRexp (..)
+    -- * Functions
     , simplifyNodeRanges 
     ) where
 
@@ -62,6 +65,10 @@ simplifySortedNodeRanges (i1@(Interval a b):i2@(Interval c d):xs)
         simplifySortedNodeRanges $ Interval a (max b d) : xs
     | otherwise = i1 : simplifySortedNodeRanges (i2:xs)
 
+-- | This function is an helper function to simplify
+-- the handling the node range. After simplification,
+-- the ranges are sorted in ascending order and no
+-- node range overlap.
 simplifyNodeRanges :: [NodeRange] -> [NodeRange]
 simplifyNodeRanges = simplifySortedNodeRanges . sort . map rangeRearranger
     where rangeRearranger i@(Index _) = i
@@ -76,11 +83,13 @@ data Op =
     | OpEq  | OpNe  | OpAnd | OpOr
     deriving (Eq, Show)
 
--- | Represent action grammar
+-- | Represent an action Each production
+-- of the grammar more or less map to a
+-- data constructor of this type.
 data ActionExpr =
     -- | { ... ; ... ; ... ; ... }
       ActionExprs [ActionExpr]
-    -- Basic binary opertor
+    -- | Basic binary opertor
     | BinOp Op ActionExpr ActionExpr
     -- | Often find an attribute
     | ARef String
@@ -117,9 +126,20 @@ data WebRexp =
     -- every tag/class name
     | Ref WebRef
 
+    -- | '>' operator in the language, used
+    -- to follow hyper link
     | DiggLink
+
+    -- | '|' operator in the language, used
+    -- to select the next sibling node.
     | NextSibling
+
+    -- | '^' operator in the language, used
+    -- to select the previous sibling node.
     | PreviousSibling
+
+    -- | '<' operator in the language. 
+    -- Select the parent node
     | Parent
     deriving (Eq, Show)
 

@@ -1,7 +1,4 @@
-module Webrexp.Parser
-    ( webRexpParser 
-    , Parsed
-    ) where
+module Webrexp.Parser( webRexpParser ) where
 
 import Control.Applicative( (<$>), (<*), (<$) )
 import Control.Monad.Identity
@@ -14,9 +11,11 @@ import Text.Parsec.Language( haskellStyle )
 import qualified Text.Parsec.Token as P
 
 -- | Parser used to parse a webrexp.
--- Use just like any Parsec 3.0 parser.
-webRexpParser :: Parsed st WebRexp
+-- Use just like any 'Parsec' 3.0 parser.
+webRexpParser :: ParsecT String st Identity WebRexp
 webRexpParser = webrexp 
+
+type Parsed st b = ParsecT String st Identity b
 
 -----------------------------------------------------------
 --          Lexing defs
@@ -58,8 +57,6 @@ lexer  = P.makeTokenParser
 -----------------------------------------------------------
 --          Real "grammar"
 -----------------------------------------------------------
-type Parsed st b = ParsecT String st Identity b
-
 webrexpCombinator :: OperatorTable String st Identity WebRexp
 webrexpCombinator =
     [ [ postfix "!" Unique
@@ -93,7 +90,8 @@ noderange = do
 
 rangeParser :: Parsed st WebRexp
 rangeParser = do
-    Range <$> sepBy noderange (whiteSpace >> char ',' >> whiteSpace)
+    Range . simplifyNodeRanges <$> 
+            sepBy noderange (whiteSpace >> char ',' >> whiteSpace)
                             <* whiteSpace
 
 webrexpOp :: Parsed st WebRexp

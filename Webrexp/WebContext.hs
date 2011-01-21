@@ -1,14 +1,23 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Webrexp.WebContext
-    ( WebCrawler
+    ( 
+    -- * Types
+      WebCrawler
     , WebContextT ( .. )
     , WebContext
     , NodeContext (..)
-    , mapCurrentNodes 
+
+    -- * User function
     , evalWithEmptyContext
+
+    
+    -- * Implementation info
+    -- ** Evaluation function
+    , mapCurrentNodes 
     , hasNodeLeft 
     , EvalState (..)
 
+    -- ** State manipulation functions
     , pushCurrentState 
     , popCurrentState 
     , getEvalState 
@@ -16,17 +25,21 @@ module Webrexp.WebContext
     )
     where
 
+import Control.Applicative
+import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Data.Functor.Identity
 import Data.Maybe
 
-import Control.Applicative
-import Control.Monad
-
+import Webrexp.ResourcePath
 import Webrexp.GraphWalker
 
+-- | Typical use of the WebContextT monad transformer
+-- allowing to download information
 type WebCrawler node a = WebContextT node IO a
+
+-- | WebContext is 'WebContextT' as a simple Monad
 type WebContext node a = WebContextT node Identity a
 
 --------------------------------------------------
@@ -71,7 +84,9 @@ instance (MonadIO m) => MonadIO (WebContextT node m) where
 -- used to go up to it.
 data NodeContext node = NodeContext
     { parents :: [(node, Int)]
-    , this :: node }
+    , this :: node 
+    , rootRef :: ResourcePath
+    }
 
 -- | This type represent the temporary results
 -- of the evaluation of regexp.
@@ -83,14 +98,14 @@ data EvalState node =
 
 
 data Context node = Context
-    { executionRoot :: String,
+    { executionRoot :: ResourcePath,
       currentNodes :: EvalState node,
       contextStack :: [EvalState node]
     }
 
 emptyContext :: Context node
 emptyContext = Context
-    { executionRoot = ""
+    { executionRoot = Local ""
     , contextStack = []
     , currentNodes = None }
 

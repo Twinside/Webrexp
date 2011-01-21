@@ -1,15 +1,19 @@
-module Webrexp.Eval where
+module Webrexp.Eval
+    (
+    -- * Functions
+    evalWebRexp,
+    evalAction 
+    ) where
 
-import Data.List
+import Control.Applicative
+import Control.Monad.IO.Class
+import Data.Maybe ( catMaybes )
 
+import Webrexp.ResourcePath
 import Webrexp.GraphWalker
 import Webrexp.Exprtypes
 import Webrexp.WebContext
 
-isVerifiedIn :: (a -> Bool) -> [a] -> Bool
-isVerifiedIn f lst = case find f lst of
-                        Nothing -> False
-                        Just _ -> True
 
 evalList :: (GraphWalker node)
          => Bool -> [WebRexp] -> WebCrawler node Bool
@@ -21,7 +25,10 @@ evalList isTail (x:xs) = do
        then evalList isTail xs
        else return False
 
-evalBranches :: (GraphWalker node) => Bool -> [WebRexp] -> WebCrawler node Bool
+-- | Evaluate a list of webrexp with a rollback system (reverting
+-- to the initial state for every list element).
+evalBranches :: (GraphWalker node)
+             => Bool -> [WebRexp] -> WebCrawler node Bool
 evalBranches _ [] = return True
 evalBranches isTail [x] = do
     popCurrentState
@@ -43,6 +50,9 @@ applyFunTillFalse f isTail obj = do
     if valid then applyFunTillFalse f isTail obj
              else return False
 
+-- | For the current state, filter the value to keep
+-- only the values which are included in the node
+-- range.
 filterNodes :: [NodeRange] -> WebCrawler node Bool
 filterNodes ranges = getEvalState >>= \state ->
     case state of
@@ -70,28 +80,22 @@ filterNodes ranges = getEvalState >>= \state ->
                 | otherwise = discardLockstep xs elist
 
 
--- | Evaluate an expression while it's still valid.
--- @param@ isTail Tell if the list is from a tail node
-evalListTillFalse :: (GraphWalker node)
-                  => Bool -> [WebRexp] -> WebCrawler node Bool
-evalListTillFalse = applyFunTillFalse evalList
-
 -- | repeatidly eval the webrexp until a false is returned.
 evalTillFalse :: (GraphWalker node)
               => Bool -> WebRexp -> WebCrawler node Bool
 evalTillFalse = applyFunTillFalse evalWebRexp
 
-evalAction :: (GraphWalker node)
-           => ActionExpr -> WebCrawler node Bool
-evalAction _ = return False
 
+-- | Given a node search for valid children, check for their
+-- validity against the requirement.
 searchRefIn :: (GraphWalker node)
             => WebRef -> [NodeContext node] -> [NodeContext node]
 searchRefIn ref = concatMap (searchRef ref)
   where searchRef (Elem s) n =
             [ NodeContext {
                 parents = subP ++ parents n,
-                this = sub
+                this = sub,
+                rootRef = rootRef n
               }  | (sub, subP) <- findNamed (this n) s]
         searchRef (OfClass r s) n = 
             [n | v <- searchRef r n, attribOf (this v) "class" == Just s]
@@ -124,8 +128,9 @@ evalWebRexp _ (Str str) = do
     setEvalState $ Strings [str]
     return True
 
-evalWebRexp _ (Action action) =
-    evalAction action
+evalWebRexp _ (Action _action) =
+    return False
+    -- evalAction action
     
 evalWebRexp _ (Unique _subs) = -- WebRexp
     error "Unimplemented - Unique (webrexp)"
@@ -144,7 +149,7 @@ evalWebRexp _ (Range subs) = do
     return True
 
 evalWebRexp _ DiggLink =
-    return False
+    getEvalState >>= diggLinks
 
 evalWebRexp _ NextSibling = do
   mapCurrentNodes $ siblingAccessor 1
@@ -160,9 +165,41 @@ evalWebRexp _ Parent =
            case parents node of
              []       -> Nothing
              (n,_):ps ->
-              Just $ NodeContext { parents = ps
-                                 , this = n }
+              Just $ node { parents = ps
+                          , this = n }
 
+downLinks :: (GraphWalker node) => ResourcePath -> IO (Maybe (NodeContext node))
+downLinks path = do
+    down <- liftIO $ accessGraph path
+    case down of
+         Nothing -> return Nothing
+         Just n -> return . Just $
+                    NodeContext { parents = []
+         	                    , rootRef = path
+         	                    , this = n }
+
+diggLinks :: (GraphWalker node) => EvalState node -> WebCrawler node Bool
+diggLinks (Nodes subs) = do
+    neoNodes <- liftIO $ catMaybes <$>
+                    sequence [ downLinks $ rootRef s <//> toRezPath url
+                                | s <- subs
+                                , let href = attribOf (this s) "href"
+                                , href /= Nothing
+                                , let Just url = href ]
+    case neoNodes of
+      [] -> setEvalState None >> return False
+      lst -> setEvalState (Nodes lst) >> return True
+
+diggLinks (Strings str) = do
+    newDocs <- liftIO $ mapM (downLinks . toRezPath) str
+    case catMaybes newDocs of
+         [] -> setEvalState None >> return False
+         lst -> do setEvalState $ Nodes lst
+                   return True
+
+diggLinks _ = do
+    setEvalState None
+    return False
 
 -- | Let access sibling nodes with a predefined index.
 siblingAccessor :: (GraphWalker node)
@@ -180,5 +217,98 @@ siblingAccessor idx node =
                 else Just $ NodeContext
                         { parents = (n, neoIndex):ps
                         , this = children !! neoIndex
+                        , rootRef = rootRef node
                         }
+
+
+--------------------------------------------------
+----            Action Evaluation
+--------------------------------------------------
+
+-- | Data used for the evaluation of actions. Represent the
+-- whole set of representable data at runtime.
+data ActionValue =
+      AInt    Int
+    | ABool   Bool
+    | AString String
+    | ATypeError
+    deriving (Show)
+
+binArith :: (Int -> Int -> Int) -> ActionValue -> ActionValue -> ActionValue
+binArith f (AInt a) (AInt b) = AInt $ f a b
+binArith _ _ _ = ATypeError
+
+valComp :: (Int -> Int -> Bool) -> ActionValue -> ActionValue -> ActionValue
+valComp f (AInt a) (AInt b) = ABool $ f a b
+valComp _ _ _ = ATypeError
+
+binComp :: ActionValue -> ActionValue -> ActionValue
+binComp (AInt a) (AInt b) = ABool $ a == b
+binComp (ABool a) (ABool b) = ABool $ a == b
+binComp (AString a) (AString b) = ABool $ a == b
+binComp ATypeError _ = ATypeError
+binComp _ ATypeError = ATypeError
+binComp _ _ = ATypeError
+
+boolComp :: (Bool -> Bool -> Bool) -> ActionValue -> ActionValue -> ActionValue
+boolComp f (ABool a) (ABool b) = ABool $ f a b
+boolComp f a         (AInt b) = boolComp f a (ABool $ b /= 0)
+boolComp f (AInt a)         b = boolComp f (ABool $ a /= 0) b
+boolComp _ _                _ = ABool $ False
+
+isActionResultValid :: ActionValue -> Bool
+isActionResultValid (ABool False) = False
+isActionResultValid ATypeError = False
+isActionResultValid _ = True
+
+-- | Evaluate embedded action in WebRexp
+evalAction :: (GraphWalker node)
+           => ActionExpr -> WebCrawler node ActionValue
+evalAction (ActionExprs actions) = evaluator actions
+    where evaluator [] = return $ ABool True
+          evaluator [x] = evalAction x
+          evaluator (x:xs) = do
+              rez <- evalAction x
+              if isActionResultValid rez
+              	 then evaluator xs
+              	 else return rez
+
+
+evalAction (CstI i) = return $ AInt i
+evalAction (CstS s) = return $ AString s
+evalAction (ARef _) = return ATypeError
+evalAction OutputAction = return ATypeError
+
+evalAction (BinOp OpAdd a b) = 
+    binArith (+) <$> evalAction a <*> evalAction b 
+evalAction (BinOp OpSub a b) = 
+    binArith (-) <$> evalAction a <*> evalAction b 
+evalAction (BinOp OpMul a b) = 
+    binArith (*) <$> evalAction a <*> evalAction b 
+evalAction (BinOp OpDiv a b) = 
+    binArith div <$> evalAction a <*> evalAction b
+
+evalAction (BinOp OpLt a b) = 
+    valComp (<) <$> evalAction a <*> evalAction b  
+evalAction (BinOp OpLe a b) = 
+    valComp (<=) <$> evalAction a <*> evalAction b  
+evalAction (BinOp OpGt a b) = 
+    valComp (>) <$> evalAction a <*> evalAction b  
+evalAction (BinOp OpGe a b) = 
+    valComp (>=) <$> evalAction a <*> evalAction b
+
+evalAction (BinOp OpEq a b) =
+    binComp <$> evalAction a <*> evalAction b
+evalAction (BinOp OpNe a b) =
+    valNot <$> (binComp <$> evalAction a <*> evalAction b)
+        where valNot (ABool f) = ABool $ not f
+              valNot e = e
+
+evalAction (BinOp OpAnd a b) =
+    boolComp (&&) <$> evalAction a <*> evalAction b
+evalAction (BinOp OpOr  a b) =
+    boolComp (||) <$> evalAction a <*> evalAction b
+
+-- evalAction _ = return ATypeError
+
 

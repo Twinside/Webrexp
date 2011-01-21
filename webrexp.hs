@@ -1,13 +1,10 @@
-import System.Environment
-import Text.Parsec
+-- | Generic module for using Webrexp as a user.
+module Webrexp 
+    ( module Webrexp.Eval
+    , module Webrexp.Parser
+    )
+    where
 
-import Webrexp.Parser
-import Webrexp.Eval()
-
-main :: IO ()
-main = do
-    args <- getArgs
-    file <- readFile $ args !! 1
-    print $ runParser webRexpParser () (args !! 1) file
-    return ()
+import Webrexp.Eval( evalWebRexp )
+import Webrexp.Parser( webRexpParser )
 

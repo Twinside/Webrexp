@@ -2,17 +2,36 @@ Name:       Webrexp
 Version:    0.1
 Synopsis:   Regexp-like engine to scrap web data
 Build-Type: Simple
-Cabal-Version: >= 1.2
+Cabal-Version: >= 1.8
 Description: The intent of this project is to provide a DSL (just an expression language) to be able to write one-liner to scrap web data
 Author: Vincent Berthoux
 Maintainer: Vincent Berthoux
 
 Executable webrexp
-    Main-Is: webrexp.hs
+    Main-Is: webrexpMain.hs
     Ghc-Options: -Wall
-    Build-Depends: base >= 2.0, mtl,
-                   HTTP >= 4000.1.1 && < 4000.2,
-                   hxt >= 9.0.1 && < 9.1,
-                   parsec >= 3.1 && < 3.2,
-                   transformers >= 0.2.2 && < 0.3
+  Build-Depends: base >= 2.0, mtl,
+                 HTTP >= 4000.1.1 && < 4000.2,
+                 hxt >= 9.0.1 && < 9.1,
+                 parsec >= 3.1 && < 3.2,
+                 transformers >= 0.2.2 && < 0.3,
+                 network >= 2.2.1.7 && < 2.3,
+                 filepath,
+                 Webrexp
+
+Library
+  Ghc-Options: -Wall
+  Exposed-Modules: Webrexp,
+                   Webrexp.Parser,
+                   Webrexp.Eval,
+                   Webrexp.Exprtypes,
+                   Webrexp.GraphWalker,
+                   Webrexp.ResourcePath
+  Build-Depends: base >= 2.0, mtl,
+                 HTTP >= 4000.1.1 && < 4000.2,
+                 hxt >= 9.0.1 && < 9.1,
+                 parsec >= 3.1 && < 3.2,
+                 transformers >= 0.2.2 && < 0.3,
+                 network >= 2.2.1.7 && < 2.3,
+                 filepath
 
