@@ -1,23 +1,32 @@
-
+-- | Module implementing plumbing to get a unified path locator,
+-- handling URI & local path.
 module Webrexp.ResourcePath 
     ( ResourcePath (..)
     , toRezPath
     , (<//>)
+    , dumpResourcePath
     ) where
 
 import Data.Maybe
+import Network.HTTP
 import Network.URI
+import System.Directory
 import System.FilePath
+import qualified Data.ByteString.Lazy as B
+
+import Webrexp.Log
+
 
 data ResourcePath =
       Local FilePath
     | Remote URI
     deriving (Eq, Show)
 
-toRezPath :: String -> ResourcePath
-toRezPath s = case parseURI s of
-        Just u -> Remote u
-        Nothing -> Local s
+toRezPath :: String -> Maybe ResourcePath
+toRezPath s = case (parseURI s, isValid s) of
+        (Just u, _) -> Just $ Remote u
+        (Nothing, True) -> Just $ Local s
+        (Nothing, False) -> Nothing
 
 -- | Resource path combiner, similar to </> in use,
 -- but also handle URI.
@@ -26,7 +35,8 @@ toRezPath s = case parseURI s of
 (<//>) (Remote a) (Remote b) =
     case b `relativeTo` a of
          -- TODO : find another way for this
-         Nothing -> Remote a
+         Nothing -> error "Can't merge resourcepath" 
+                   -- Remote a
          Just c -> Remote c
 
 (<//>) (Remote a) (Local b)
@@ -35,4 +45,21 @@ toRezPath s = case parseURI s of
         Nothing -> error "Not possible, checked before"
 
 (<//>) _ _ = error "Mixing local/remote path"
+
+dumpResourcePath :: ResourcePath -> IO ()
+dumpResourcePath (Local source) = do
+    cwd <- getCurrentDirectory
+    copyFile source $ cwd </> filename
+     where (_, filename) = splitFileName source
+
+dumpResourcePath (Remote a) =
+  downloadBinary a filename
+    where (_, filename) = splitFileName $ uriPath a
+
+downloadBinary :: URI -> FilePath -> IO ()
+downloadBinary url filename = do
+    infoLog $ "Downloading '" ++ show url ++ "' in '" ++ filename
+    rsp <- Network.HTTP.simpleHTTP $ mkRequest GET url
+    body <- getResponseBody rsp
+    B.writeFile filename body
 

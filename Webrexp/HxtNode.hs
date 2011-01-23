@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeSynonymInstances #-}
-module Webrexp.HxtNode where
+module Webrexp.HxtNode( HxtNode ) where
 
 import Network.HTTP
 import Network.Browser
@@ -23,8 +23,8 @@ instance GraphWalker HxtNode where
     valueOf = getValue
     nameOf = getName
 
-findAttribute :: HxtNode -> String -> Maybe String
-findAttribute (NTree (XTag _ attrList) _) attrName = attrFinder attrList
+findAttribute :: String -> HxtNode -> Maybe String
+findAttribute attrName (NTree (XTag _ attrList) _) = attrFinder attrList
   where attrFinder [] = Nothing
         attrFinder (NTree (XAttr name) [value]:_)
             | localPart name == attrName = Just $ valueOf value
@@ -44,7 +44,7 @@ getValue (NTree (XText txt) _) = txt
 getValue _ = ""
 
 parseToHTMLNode :: String -> HxtNode
-parseToHTMLNode txt = case findFirstNamed nodes "html" of
+parseToHTMLNode txt = case findFirstNamed "html" nodes of
                         Nothing -> NTree (XTag (mkName "html") []) nodes
                         Just (d, _) -> d
     where nodes = parseHtmlContent txt

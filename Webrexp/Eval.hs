@@ -14,7 +14,6 @@ import Webrexp.GraphWalker
 import Webrexp.Exprtypes
 import Webrexp.WebContext
 
-
 evalList :: (GraphWalker node)
          => Bool -> [WebRexp] -> WebCrawler node Bool
 evalList _ [] = return True
@@ -96,13 +95,13 @@ searchRefIn ref = concatMap (searchRef ref)
                 parents = subP ++ parents n,
                 this = sub,
                 rootRef = rootRef n
-              }  | (sub, subP) <- findNamed (this n) s]
+              }  | (sub, subP) <- findNamed s $ this n]
         searchRef (OfClass r s) n = 
-            [n | v <- searchRef r n, attribOf (this v) "class" == Just s]
+            [n | v <- searchRef r n, attribOf "class" (this v) == Just s]
         searchRef (Attrib  r s) n =
-            [n | v <- searchRef r n, attribOf (this v) s /= Nothing]
+            [n | v <- searchRef r n, attribOf s (this v) /= Nothing]
         searchRef (OfName  r s) n =
-            [n | v <- searchRef r n, attribOf (this v) "name" == Just s]
+            [n | v <- searchRef r n, attribOf "name" (this v) == Just s]
 
 -- | Evaluate an expression, the boolean is here to propagate
 -- the idea of 'tail' call, if we are at the tail of the expression
@@ -168,8 +167,9 @@ evalWebRexp _ Parent =
               Just $ node { parents = ps
                           , this = n }
 
-downLinks :: (GraphWalker node) => ResourcePath -> IO (Maybe (NodeContext node))
-downLinks path = do
+downLinks :: (GraphWalker node)
+          => Maybe ResourcePath -> IO (Maybe (NodeContext node))
+downLinks (Just path) = do
     down <- liftIO $ accessGraph path
     case down of
          Nothing -> return Nothing
@@ -177,15 +177,17 @@ downLinks path = do
                     NodeContext { parents = []
          	                    , rootRef = u
          	                    , this = n }
+downLinks Nothing = return Nothing
 
 diggLinks :: (GraphWalker node) => EvalState node -> WebCrawler node Bool
 diggLinks (Nodes subs) = do
     neoNodes <- liftIO $ catMaybes <$>
-                    sequence [ downLinks $ rootRef s <//> toRezPath url
+                    sequence [ downLinks $ (rootRef s <//>) <$> url
                                 | s <- subs
-                                , let href = attribOf (this s) "href"
+                                , let href = attribOf "href" $ this s
                                 , href /= Nothing
-                                , let Just url = href ]
+                                , let Just ref = href
+                                , let url = toRezPath ref ]
     case neoNodes of
       [] -> setEvalState None >> return False
       lst -> setEvalState (Nodes lst) >> return True
@@ -258,8 +260,33 @@ boolComp _ _                _ = ABool $ False
 
 isActionResultValid :: ActionValue -> Bool
 isActionResultValid (ABool False) = False
+isActionResultValid (AInt 0) = False
 isActionResultValid ATypeError = False
 isActionResultValid _ = True
+
+dumpContent :: (GraphWalker node) => WebCrawler node ActionValue
+dumpContent = do
+    st <- getEvalState
+    case st of
+      Blob _ -> return ATypeError
+      None -> return ATypeError
+      Nodes ns ->
+          mapM_ dumpNode ns >> return (ABool True)
+
+      Strings str ->
+          mapM_ dumpString str >> return (ABool True)
+          
+dumpNode :: (GraphWalker node)
+         => NodeContext node -> WebCrawler node ()
+dumpNode n =
+  case attribOf "src" (this n) >>= toRezPath of
+    Nothing -> return ()
+    Just r -> liftIO . dumpResourcePath $ (rootRef n) <//> r
+
+dumpString :: String -> WebCrawler node ()
+dumpString s = case toRezPath s of
+    Nothing -> textOutput s
+    Just p -> liftIO $ dumpResourcePath p
 
 -- | Evaluate embedded action in WebRexp
 evalAction :: (GraphWalker node)
@@ -277,7 +304,7 @@ evalAction (ActionExprs actions) = evaluator actions
 evalAction (CstI i) = return $ AInt i
 evalAction (CstS s) = return $ AString s
 evalAction (ARef _) = return ATypeError
-evalAction OutputAction = return ATypeError
+evalAction OutputAction = dumpContent
 
 evalAction (BinOp OpAdd a b) = 
     binArith (+) <$> evalAction a <*> evalAction b 
@@ -308,7 +335,4 @@ evalAction (BinOp OpAnd a b) =
     boolComp (&&) <$> evalAction a <*> evalAction b
 evalAction (BinOp OpOr  a b) =
     boolComp (||) <$> evalAction a <*> evalAction b
-
--- evalAction _ = return ATypeError
-
 

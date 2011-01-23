@@ -4,7 +4,7 @@ module Webrexp.Log (
         debugLog,
 
         networkInfo,
-        networkError
+        networkError,
     ) where
 
 errorLog :: String -> IO ()
@@ -21,3 +21,4 @@ networkError = putStrLn
 
 debugLog :: String -> IO ()
 debugLog = putStrLn
+

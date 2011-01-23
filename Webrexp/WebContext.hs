@@ -22,6 +22,9 @@ module Webrexp.WebContext
     , popCurrentState 
     , getEvalState 
     , setEvalState 
+
+    -- ** Logging
+    , textOutput 
     )
     where
 
@@ -156,3 +159,5 @@ mapCurrentNodes f = WebContextT $ \c ->
          in return ((), c{ currentNodes = Nodes newNodes })
       _ -> return ((), c)
 
+textOutput :: String -> WebCrawler node ()
+textOutput = liftIO . putStrLn

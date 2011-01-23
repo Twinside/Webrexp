@@ -1,10 +1,15 @@
 module Webrexp.GraphWalker
     ( GraphWalker(..)
+    , NodePath
     , findNamed
     , findFirstNamed 
     ) where
 
 import Webrexp.ResourcePath
+
+-- | Represent the path used to find the node
+-- from the starting point of the graph.
+type NodePath a = [(a,Int)]
 
 -- | The aim of this typeclass is to permit
 -- the use of different html/xml parser if
@@ -15,7 +20,7 @@ import Webrexp.ResourcePath
 class GraphWalker a where
     -- | Get back an attribute of the node
     -- if it exists
-    attribOf :: a -> String -> Maybe String
+    attribOf :: String -> a -> Maybe String
 
     -- | If the current node is named, return
     -- it's name, otherwise return Nothing.
@@ -41,19 +46,22 @@ class GraphWalker a where
 -- the returned list must contain :
 --
 findNamed :: (GraphWalker a)
-          => a -> String -> [(a, [(a, Int)])]
-findNamed _ _ = []
-
--- | Given a list of node, try to find a named node
-findNamedInList :: (GraphWalker a)
-                => [a] -> String -> [(a, [(a, Int)])]
-findNamedInList _lst _name = []
+          => String -> a -> [(a, [(a, Int)])]
+findNamed name node = concat $
+  thisNodeValid : map (findSubNamed . addHistory) (childrenOf node)
+    where thisNodeValid = if nameOf node == Just name
+                             then [(node,[])] else []
+          addHistory a = (a, [])
+          findSubNamed (a, hist) = concat $ 
+            filter (\(c,_) -> nameOf c == Just name) lst : map findSubNamed lst
+              where lst = [(child, (a,idx) : hist) |
+                                (child, idx)<- zip (childrenOf a) [0..]]
 
 
 findFirstNamed :: (GraphWalker a)
-               => [a] -> String -> Maybe (a, [(a,Int)])
-findFirstNamed lst name = if null results
+               => String -> [a] -> Maybe (a, [(a,Int)])
+findFirstNamed name lst = if null results
                              then Nothing
                              else Just $ head results
-    where results = findNamedInList lst name
+    where results = concatMap (findNamed name) lst 
 

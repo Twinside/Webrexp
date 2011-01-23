@@ -17,6 +17,7 @@ Executable webrexp
                  transformers >= 0.2.2 && < 0.3,
                  network >= 2.2.1.7 && < 2.3,
                  directory >= 1.0,
+                 bytestring >= 0.9.1.7 && < 1.0,
                  filepath,
                  Webrexp
 
@@ -35,5 +36,6 @@ Library
                  transformers >= 0.2.2 && < 0.3,
                  network >= 2.2.1.7 && < 2.3,
                  directory >= 1.0,
+                 bytestring >= 0.9.1.7 && < 1.0,
                  filepath
 
