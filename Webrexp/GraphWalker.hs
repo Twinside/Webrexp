@@ -17,7 +17,7 @@ type NodePath a = [(a,Int)]
 -- the logic should use this interface.
 --
 -- Minimal implementation : accessGraph, attribOf, childrenOf, valueOf
-class GraphWalker a where
+class (Show a) => GraphWalker a where
     -- | Get back an attribute of the node
     -- if it exists
     attribOf :: String -> a -> Maybe String
@@ -47,12 +47,10 @@ class GraphWalker a where
 --
 findNamed :: (GraphWalker a)
           => String -> a -> [(a, [(a, Int)])]
-findNamed name node = concat $
-  thisNodeValid : map (findSubNamed . addHistory) (childrenOf node)
+findNamed name node = thisNodeValid ++ findSubNamed (node, [])
     where thisNodeValid = if nameOf node == Just name
-                             then [(node,[])] else []
-          addHistory a = (a, [])
-          findSubNamed (a, hist) = concat $ 
+                                then [(node,[])] else []
+          findSubNamed (a, hist) = concat $
             filter (\(c,_) -> nameOf c == Just name) lst : map findSubNamed lst
               where lst = [(child, (a,idx) : hist) |
                                 (child, idx)<- zip (childrenOf a) [0..]]

@@ -5,6 +5,7 @@ module Webrexp.Eval
     evalAction 
     ) where
 
+import Debug.Trace
 import Control.Applicative
 import Control.Monad.IO.Class
 import Data.Maybe ( catMaybes )
@@ -13,6 +14,7 @@ import Webrexp.ResourcePath
 import Webrexp.GraphWalker
 import Webrexp.Exprtypes
 import Webrexp.WebContext
+import Webrexp.Log
 
 evalList :: (GraphWalker node)
          => Bool -> [WebRexp] -> WebCrawler node Bool
@@ -90,76 +92,101 @@ evalTillFalse = applyFunTillFalse evalWebRexp
 searchRefIn :: (GraphWalker node)
             => WebRef -> [NodeContext node] -> [NodeContext node]
 searchRefIn ref = concatMap (searchRef ref)
-  where searchRef (Elem s) n =
+  where searchRef (Elem s) n = (\a -> trace ("ELEM: " ++ show(length a)) a)
             [ NodeContext {
                 parents = subP ++ parents n,
                 this = sub,
                 rootRef = rootRef n
-              }  | (sub, subP) <- findNamed s $ this n]
-        searchRef (OfClass r s) n = 
-            [n | v <- searchRef r n, attribOf "class" (this v) == Just s]
-        searchRef (Attrib  r s) n =
-            [n | v <- searchRef r n, attribOf s (this v) /= Nothing]
-        searchRef (OfName  r s) n =
-            [n | v <- searchRef r n, attribOf "name" (this v) == Just s]
+            }  | (sub, subP) <- findNamed s $ this n]
+        searchRef (OfClass r s) n = (\a -> trace ("CLASS: " ++ show(length a)) a)
+            [v | v <- searchRef r n, attribOf "class" (this v) == Just s]
+        searchRef (Attrib  r s) n = (\a -> trace ("ATTRIB: " ++ show(length a)) a)
+            [v | v <- searchRef r n, attribOf s (this v) /= Nothing]
+        searchRef (OfName  r s) n =(\a -> trace ("NAME: " ++ show(length a)) a)
+            [v | v <- searchRef r n, attribOf "name" (this v) == Just s]
 
 -- | Evaluate an expression, the boolean is here to propagate
 -- the idea of 'tail' call, if we are at the tail of the expression
 -- we can discard some elements safely and thus reduce memory
 -- usage (which can be important)
 evalWebRexp :: (GraphWalker node) => Bool -> WebRexp -> WebCrawler node Bool
-evalWebRexp isTail (Branch subs) = -- [WebRexp]
-    pushCurrentState >> evalBranches isTail subs
+evalWebRexp isTail (Branch subs) = do
+    liftIO $ debugLog "> '[... ; ...]'"
+    pushCurrentState
+    evalBranches isTail subs
 
-evalWebRexp isTail (List subs) =
+evalWebRexp isTail (List subs) = do
+    liftIO $ debugLog "> '[...]'"
     evalList isTail subs
 
-evalWebRexp isTail (Star subs) =
+evalWebRexp isTail (Star subs) = do
+    liftIO $ debugLog "> '...*'"
     evalTillFalse isTail subs
 
 evalWebRexp isTail (Plus subs) = do
+    liftIO $ debugLog "> '...+'"
     once <- evalWebRexp isTail subs
     if once then do _ <- evalTillFalse isTail subs
                     return True
             else return False
 
 evalWebRexp _ (Str str) = do
+    liftIO $ debugLog "> '\"...\"'"
     setEvalState $ Strings [str]
     return True
 
-evalWebRexp _ (Action _action) =
-    return False
-    -- evalAction action
+evalWebRexp _ (Action action) = do
+    liftIO $ debugLog "> '{...}'"
+    rez <- evalAction action
+    return $ isActionResultValid rez
     
-evalWebRexp _ (Unique _subs) = -- WebRexp
+evalWebRexp _ (Unique _subs) = do
+    liftIO $ debugLog "> '!'"
     error "Unimplemented - Unique (webrexp)"
     -- return False
 
-evalWebRexp _ (Ref ref) = getEvalState >>= \st ->
+evalWebRexp _ (Ref ref) = do
+    liftIO . debugLog $ "> 'ref' : " ++ show ref
+    st <- getEvalState
     case st of
          Nodes ns -> do
-             setEvalState . Nodes $ searchRefIn ref ns
-             hasNodeLeft
-         _ -> do setEvalState None
+             let rezNode = searchRefIn ref ns
+             liftIO . debugLog $ show $ map (nameOf . this) ns
+             liftIO . debugLog $ show $ map (nameOf . this) rezNode
+             liftIO . debugLog $ show $ map (map nameOf . childrenOf . this) rezNode
+             liftIO . debugLog $ ">>> found " ++ show (length ns) 
+                                              ++ "->" 
+                                              ++ show (length rezNode) 
+                                              ++ " nodes"
+             setEvalState $ Nodes rezNode
+             return . not $ null rezNode
+         _ -> do liftIO $ debugLog ">>> No nodes"
+                 setEvalState None
                  return False
 
 evalWebRexp _ (Range subs) = do
+    liftIO $ debugLog "> '[...]'"
     _ <- filterNodes subs
     return True
 
-evalWebRexp _ DiggLink =
+evalWebRexp _ DiggLink = do
+    liftIO $ debugLog "> '>'"
     getEvalState >>= diggLinks
 
 evalWebRexp _ NextSibling = do
+  liftIO $ debugLog "> '|'"
   mapCurrentNodes $ siblingAccessor 1
   hasNodeLeft
 
 evalWebRexp _ PreviousSibling = do
+  liftIO $ debugLog "> '^'"
   mapCurrentNodes $ siblingAccessor (-1)
   hasNodeLeft
 
-evalWebRexp _ Parent =
-  mapCurrentNodes parentExtractor >> hasNodeLeft
+evalWebRexp _ Parent = do
+  liftIO $ debugLog "> '<'"
+  mapCurrentNodes parentExtractor 
+  hasNodeLeft
     where parentExtractor node = 
            case parents node of
              []       -> Nothing

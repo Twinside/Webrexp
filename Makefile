@@ -9,7 +9,7 @@ clean:
 	runhaskell Setup.hs clean
 
 run:
-	runhaskell parserTest.hs
+	cd debug; ./debug.sh 2>&1 | tee out.txt; cd ..
 
 test:
 	runhaskell downloadTest.hs -package bytestring -package network -package http

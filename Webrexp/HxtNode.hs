@@ -15,6 +15,8 @@ import Webrexp.Log
 import Webrexp.ResourcePath
 import Webrexp.GraphWalker
 
+import Debug.Trace
+
 type HxtNode = NTree XNode
 
 instance GraphWalker HxtNode where
@@ -25,7 +27,9 @@ instance GraphWalker HxtNode where
     nameOf = getName
 
 findAttribute :: String -> HxtNode -> Maybe String
-findAttribute attrName (NTree (XTag _ attrList) _) = attrFinder attrList
+findAttribute attrName (NTree (XTag _ attrList) _) =
+   -- (\a -> trace ("]] " ++ attrName ++ "=" ++ show a) a) $ 
+    attrFinder attrList
   where attrFinder [] = Nothing
         attrFinder (NTree (XAttr name) [value]:_)
             | localPart name == attrName = Just $ valueOf value
@@ -34,7 +38,7 @@ findAttribute _ _ = Nothing
 
 findChildren :: HxtNode -> [HxtNode]
 findChildren (NTree (XTag _ _) children) = children
-findChildren _ = []
+findChildren n = trace (":NOCHILD: " ++ show (nameOf n)) []
 
 getName :: HxtNode -> Maybe String
 getName (NTree (XTag name _) _) = Just $ localPart name
@@ -54,6 +58,7 @@ parseToHTMLNode txt = case findFirstNamed "html" nodes of
 loadHtml :: ResourcePath -> IO (Maybe (ResourcePath, HxtNode))
 loadHtml (Local s) = do
     infoLog $ "Opening file : '" ++ s ++ "'"
+    infoLog $ "-------------------------------------"
     realFile <- doesFileExist s
     if not realFile
        then return Nothing
@@ -62,6 +67,7 @@ loadHtml (Local s) = do
                                   . parseToHTMLNode)
 
 loadHtml (Remote uri) = do
+  infoLog $ "-------------------------------------"
   infoLog $ "Downloading URL : '" ++ show uri ++ "'"
   threadDelay 500
   (u, rsp) <- browse $ do
@@ -70,6 +76,8 @@ loadHtml (Remote uri) = do
         setOutHandler networkInfo
         request $ defaultGETRequest uri
 
+  infoLog $ "Downloaded (" ++ show uri ++ ")"
+  infoLog $ "-------------------------------------"
   return . Just
          . (,) (Remote u) 
          . parseToHTMLNode $ rspBody rsp
