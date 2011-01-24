@@ -4,31 +4,38 @@ module Webrexp.WebContext
     -- * Types
       WebCrawler
     , WebContextT ( .. )
-    , WebContext
+    , WebContext 
     , NodeContext (..)
+    , EvalState (..)
+    , Context
+
+    -- * Crawling configuration
+    , LogLevel (..)
+    , setLogLevel 
+    , getUserAgent 
+    , setUserAgent 
+    , setOutput 
+    , getHttpDelay 
+    , setHttpDelay 
 
     -- * User function
     , evalWithEmptyContext
-
     
     -- * Implementation info
     -- ** Evaluation function
     , mapCurrentNodes 
     , hasNodeLeft 
-    , EvalState (..)
+    , prepareLogger 
 
     -- ** State manipulation functions
     , pushCurrentState 
     , popCurrentState 
-    , dropContextStack
     , getEvalState 
     , setEvalState 
-
-    -- ** Logging
-    , textOutput 
     )
     where
 
+import System.IO
 import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class
@@ -45,6 +52,33 @@ type WebCrawler node a = WebContextT node IO a
 
 -- | WebContext is 'WebContextT' as a simple Monad
 type WebContext node a = WebContextT node Identity a
+
+-- | Represent a graph node and the path
+-- used to go up to it.
+data NodeContext node = NodeContext
+    { parents :: [(node, Int)]
+    , this :: node 
+    , rootRef :: ResourcePath
+    }
+
+-- | This type represent the temporary results
+-- of the evaluation of regexp.
+data EvalState node =
+
+      Nodes   [NodeContext node]
+    | Strings [String]
+    | None
+
+data LogLevel = Quiet | Normal | Verbose
+
+data Context node = Context
+    { currentNodes :: EvalState node
+    , contextStack :: [EvalState node]
+    , logLevel :: LogLevel
+    , httpDelay :: Int
+    , httpUserAgent :: String
+    , defaultOutput :: Handle
+    }
 
 --------------------------------------------------
 ----            Monad definitions
@@ -84,38 +118,40 @@ instance (MonadIO m) => MonadIO (WebContextT node m) where
 ----            Context manipulation
 --------------------------------------------------
 
--- | Represent a graph node and the path
--- used to go up to it.
-data NodeContext node = NodeContext
-    { parents :: [(node, Int)]
-    , this :: node 
-    , rootRef :: ResourcePath
-    }
-
--- | This type represent the temporary results
--- of the evaluation of regexp.
-data EvalState node =
-      Nodes   [NodeContext node]
-    | Strings [String]
-    | Blob    [String]
-    | None
-
-
-data Context node = Context
-    { executionRoot :: ResourcePath,
-      currentNodes :: EvalState node,
-      contextStack :: [EvalState node]
-    }
-
 emptyContext :: Context node
 emptyContext = Context
-    { executionRoot = Local ""
-    , contextStack = []
-    , currentNodes = None }
+    { contextStack = []
+    , currentNodes = None
+    , logLevel = Normal
+    , httpDelay = 1500
+    , httpUserAgent = ""
+    , defaultOutput = stdout
+    }
 
-dropContextStack :: (Monad m) => WebContextT node m ()
-dropContextStack = WebContextT $ \c ->
-        return ((), c{ contextStack = [] })
+--------------------------------------------------
+----            Getter/Setter
+--------------------------------------------------
+setHttpDelay :: (Monad m) => Int -> WebContextT node m ()
+setHttpDelay delay = WebContextT $ \c ->
+        return ((), c{ httpDelay = delay })
+
+getHttpDelay :: (Monad m) => WebContextT node m Int
+getHttpDelay = WebContextT $ \c -> return (httpDelay c, c)
+
+setOutput :: (Monad m) => Handle -> WebContextT node m ()
+setOutput handle = WebContextT $ \c ->
+        return ((), c{ defaultOutput = handle })
+
+setUserAgent :: (Monad m) => String -> WebContextT node m ()
+setUserAgent usr = WebContextT $ \c ->
+    return ((), c{ httpUserAgent = usr })
+
+getUserAgent :: (Monad m) => WebContextT node m String
+getUserAgent = WebContextT $ \c -> return (httpUserAgent c, c)
+
+setLogLevel :: (Monad m) => LogLevel -> WebContextT node m ()
+setLogLevel lvl = WebContextT $ \c ->
+    return ((), c{logLevel = lvl})
 
 pushCurrentState :: (Monad m) => WebContextT node m ()
 pushCurrentState = WebContextT $ \c ->
@@ -164,5 +200,15 @@ mapCurrentNodes f = WebContextT $ \c ->
          in return ((), c{ currentNodes = Nodes newNodes })
       _ -> return ((), c)
 
-textOutput :: String -> WebCrawler node ()
-textOutput = liftIO . putStrLn
+-- | Return normal, error, verbose logger
+prepareLogger :: (Monad m)
+              => WebContextT node m (Logger, Logger, Logger)
+prepareLogger = WebContextT $ \c ->
+    let silenceLog = \_ -> return ()
+        errLog = hPutStr stderr
+        normalLog = hPutStr stdout
+    in case logLevel c of
+      Quiet -> return ((silenceLog, errLog, silenceLog), c)
+      Normal -> return ((normalLog, errLog, silenceLog), c)
+      Verbose -> return ((normalLog, errLog, normalLog), c)
+

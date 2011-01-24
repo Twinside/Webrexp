@@ -5,16 +5,15 @@ module Webrexp.Eval
     evalAction 
     ) where
 
-import Debug.Trace
 import Control.Applicative
 import Control.Monad
-import Control.Monad.IO.Class
 import Data.Maybe ( catMaybes )
 
 import Webrexp.ResourcePath
 import Webrexp.GraphWalker
 import Webrexp.Exprtypes
 import Webrexp.WebContext
+
 import Webrexp.Log
 
 evalList :: (GraphWalker node)
@@ -66,8 +65,6 @@ filterNodes ranges = getEvalState >>= \state ->
                    >> return True
          Nodes n -> setEvalState (Nodes $ filtered n)
                  >> return True
-         Blob b -> setEvalState (Blob $ filtered b)
-                >> return True
       where filtered = discardLockstep ranges . zip [0..]
             discardLockstep [] _  = []
             discardLockstep _  [] = []
@@ -115,42 +112,42 @@ searchRefIn ref = concatMap (searchRef ref)
 -- usage (which can be important)
 evalWebRexp :: (GraphWalker node) => Bool -> WebRexp -> WebCrawler node Bool
 evalWebRexp isTail (Branch subs) = do
-    liftIO $ debugLog "> '[... ; ...]'"
+    debugLog "> '[... ; ...]'"
     pushCurrentState
     evalBranches isTail subs
 
 evalWebRexp isTail (List subs) = do
-    liftIO $ debugLog "> '[...]'"
+    debugLog "> '[...]'"
     evalList isTail subs
 
 evalWebRexp isTail (Star subs) = do
-    liftIO $ debugLog "> '...*'"
+    debugLog "> '...*'"
     evalTillFalse isTail subs
 
 evalWebRexp isTail (Plus subs) = do
-    liftIO $ debugLog "> '...+'"
+    debugLog "> '...+'"
     once <- evalWebRexp isTail subs
     if once then do _ <- evalTillFalse isTail subs
                     return True
             else return False
 
 evalWebRexp _ (Str str) = do
-    liftIO $ debugLog "> '\"...\"'"
+    debugLog "> '\"...\"'"
     setEvalState $ Strings [str]
     return True
 
 evalWebRexp _ (Action action) = do
-    liftIO $ debugLog "> '{...}'"
+    debugLog "> '{...}'"
     rez <- evalAction action
     return $ isActionResultValid rez
     
 evalWebRexp _ (Unique _subs) = do
-    liftIO $ debugLog "> '!'"
+    debugLog "> '!'"
     error "Unimplemented - Unique (webrexp)"
     -- return False
 
 evalWebRexp _ (Ref ref) = do
-    liftIO . debugLog $ "> 'ref' : " ++ show ref
+    debugLog $ "> 'ref' : " ++ show ref
     st <- getEvalState
     case st of
          Nodes ns -> do
@@ -158,37 +155,37 @@ evalWebRexp _ (Ref ref) = do
              {-liftIO . debugLog $ show $ map (nameOf . this) ns-}
              {-liftIO . debugLog $ show $ map (nameOf . this) rezNode-}
              {-liftIO . debugLog $ show $ map (map nameOf . childrenOf . this) rezNode-}
-             liftIO . debugLog $ ">>> found " ++ show (length ns) 
-                                              ++ "->" 
-                                              ++ show (length rezNode) 
-                                              ++ " nodes"
+             debugLog $ ">>> found " ++ show (length ns) 
+                                     ++ "->" 
+                                     ++ show (length rezNode) 
+                                     ++ " nodes"
              setEvalState $ Nodes rezNode
              return . not $ null rezNode
-         _ -> do liftIO $ debugLog ">>> No nodes"
+         _ -> do debugLog ">>> No nodes"
                  setEvalState None
                  return False
 
 evalWebRexp _ (Range subs) = do
-    liftIO $ debugLog "> '[...]'"
+    debugLog "> '[...]'"
     _ <- filterNodes subs
     return True
 
 evalWebRexp _ DiggLink = do
-    liftIO $ debugLog "> '>'"
+    debugLog "> '>'"
     getEvalState >>= diggLinks
 
 evalWebRexp _ NextSibling = do
-  liftIO $ debugLog "> '|'"
+  debugLog "> '|'"
   mapCurrentNodes $ siblingAccessor 1
   hasNodeLeft
 
 evalWebRexp _ PreviousSibling = do
-  liftIO $ debugLog "> '^'"
+  debugLog "> '^'"
   mapCurrentNodes $ siblingAccessor (-1)
   hasNodeLeft
 
 evalWebRexp _ Parent = do
-  liftIO $ debugLog "> '<'"
+  debugLog "> '<'"
   mapCurrentNodes parentExtractor 
   hasNodeLeft
     where parentExtractor node = 
@@ -199,9 +196,10 @@ evalWebRexp _ Parent = do
                           , this = n }
 
 downLinks :: (GraphWalker node)
-          => Maybe ResourcePath -> IO (Maybe (NodeContext node))
+          => Maybe ResourcePath -> WebCrawler node (Maybe (NodeContext node))
 downLinks (Just path) = do
-    down <- liftIO $ accessGraph path
+    (norm, err, verbo) <- prepareLogger
+    down <- accessGraph norm err verbo path
     case down of
          Nothing -> return Nothing
          Just (u,n) -> return . Just $
@@ -212,7 +210,7 @@ downLinks Nothing = return Nothing
 
 diggLinks :: (GraphWalker node) => EvalState node -> WebCrawler node Bool
 diggLinks (Nodes subs) = do
-    neoNodes <- liftIO $ catMaybes <$>
+    neoNodes <- catMaybes <$>
                     sequence [ downLinks $ (rootRef s <//>) <$> url
                                 | s <- subs
                                 , let href = attribOf "href" $ this s
@@ -224,7 +222,7 @@ diggLinks (Nodes subs) = do
       lst -> setEvalState (Nodes lst) >> return True
 
 diggLinks (Strings str) = do
-    newDocs <- liftIO $ mapM (downLinks . toRezPath) str
+    newDocs <- mapM (downLinks . toRezPath) str
     case catMaybes newDocs of
          [] -> setEvalState None >> return False
          lst -> do setEvalState $ Nodes lst
@@ -299,7 +297,6 @@ dumpContent :: (GraphWalker node) => WebCrawler node ActionValue
 dumpContent = do
     st <- getEvalState
     case st of
-      Blob _ -> return ATypeError
       None -> return ATypeError
       Nodes ns ->
           mapM_ dumpNode ns >> return (ABool True)
@@ -311,13 +308,11 @@ dumpNode :: (GraphWalker node)
          => NodeContext node -> WebCrawler node ()
 dumpNode n =
   case attribOf "src" (this n) >>= toRezPath of
-    Nothing -> return ()
-    Just r -> liftIO . dumpResourcePath $ (rootRef n) <//> r
+    Nothing -> dumpString $ valueOf (this n)
+    Just r -> dumpResourcePath (infoLog) $ (rootRef n) <//> r
 
 dumpString :: String -> WebCrawler node ()
-dumpString s = case toRezPath s of
-    Nothing -> textOutput s
-    Just p -> liftIO $ dumpResourcePath p
+dumpString s = textOutput s
 
 -- | Evaluate embedded action in WebRexp
 evalAction :: (GraphWalker node)

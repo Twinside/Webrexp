@@ -108,7 +108,9 @@ Here two elements are dumped, first the title of the document, then all the
 images of the document. When branches are encountered, the current state is kept
 and is reset after all `;`. So here `head` will be searched in the `html` node,
 and `img` to. Each branch is independent, only the last one is kept for further
-processing
+processing.
+
+If one of the branch fail, the following branches are not executed.
 
 ### Repeating
 
@@ -161,11 +163,14 @@ Expression grammar
         
     
     attribute ::= '@' webident
+
+    stringLiteral ::= '"' .* '"' // in fact, it's a regular escaped string
+                                 // literal, so you can \t and \n as you want.
     
     actionTerm ::= attribute
                  | '(' actionExpr ')'
                  | stringLiteral
-                 | natural
+                 | [0-9]+
                  | '.'
     
     actionExpr ::= actionTerm

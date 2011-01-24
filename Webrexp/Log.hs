@@ -1,24 +1,32 @@
-module Webrexp.Log (
-        errorLog,
-        infoLog,
-        debugLog,
 
-        networkInfo,
-        networkError,
+module Webrexp.Log ( 
+      errorLog
+    , infoLog
+    , networkInfo
+    , networkError
+    , debugLog
+    , textOutput 
     ) where
 
-errorLog :: String -> IO ()
-errorLog = putStrLn
+import System.IO
+import Control.Monad.IO.Class
+import Webrexp.WebContext
 
-infoLog :: String -> IO ()
-infoLog = putStrLn
+errorLog :: String -> WebCrawler node ()
+errorLog = liftIO . hPutStr stderr
 
-networkInfo :: String -> IO ()
-networkInfo = putStrLn
+infoLog :: String -> WebCrawler node ()
+infoLog = liftIO . putStrLn
 
-networkError :: String -> IO ()
-networkError = putStrLn
+networkInfo :: String -> WebCrawler node ()
+networkInfo = liftIO . putStrLn
 
-debugLog :: String -> IO ()
-debugLog = putStrLn
+networkError :: String -> WebCrawler node ()
+networkError = liftIO . hPutStr stderr
+
+debugLog :: String -> WebCrawler node ()
+debugLog = liftIO . putStrLn
+
+textOutput :: String -> WebCrawler node ()
+textOutput = liftIO . putStrLn
 

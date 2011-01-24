@@ -8,15 +8,13 @@ module Webrexp.ResourcePath
     ) where
 
 import Control.Concurrent
+import Control.Monad.IO.Class
 import Data.Maybe
 import Network.HTTP
 import Network.URI
 import System.Directory
 import System.FilePath
 import qualified Data.ByteString.Lazy as B
-
-import Webrexp.Log
-
 
 data ResourcePath =
       Local FilePath
@@ -47,21 +45,23 @@ toRezPath s = case (parseURI s, isValid s) of
 
 (<//>) _ _ = error "Mixing local/remote path"
 
-dumpResourcePath :: ResourcePath -> IO ()
-dumpResourcePath (Local source) = do
-    cwd <- getCurrentDirectory
-    copyFile source $ cwd </> filename
+dumpResourcePath :: (Monad m, MonadIO m)
+                 => (String -> m ()) -> ResourcePath -> m ()
+dumpResourcePath _ (Local source) = do
+    cwd <- liftIO $ getCurrentDirectory
+    liftIO . copyFile source $ cwd </> filename
      where (_, filename) = splitFileName source
 
-dumpResourcePath (Remote a) =
-  downloadBinary a filename
+dumpResourcePath logger (Remote a) =
+  downloadBinary logger a filename
     where (_, filename) = splitFileName $ uriPath a
 
-downloadBinary :: URI -> FilePath -> IO ()
-downloadBinary url filename = do
-    infoLog $ "Downloading '" ++ show url ++ "' in '" ++ filename
-    threadDelay 1500
-    rsp <- Network.HTTP.simpleHTTP $ mkRequest GET url
-    body <- getResponseBody rsp
-    B.writeFile filename body
+downloadBinary :: (Monad m, MonadIO m)
+               => (String -> m ()) -> URI -> FilePath -> m ()
+downloadBinary logger url filename = do
+    logger $ "Downloading '" ++ show url ++ "' in '" ++ filename
+    liftIO $ threadDelay 1500
+    rsp <- liftIO . Network.HTTP.simpleHTTP $ mkRequest GET url
+    body <- liftIO $ getResponseBody rsp
+    liftIO $ B.writeFile filename body
 

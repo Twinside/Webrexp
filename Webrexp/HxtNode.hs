@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 module Webrexp.HxtNode( HxtNode ) where
 
-import Control.Concurrent
+import Control.Monad.IO.Class
 import Network.HTTP
 import Network.Browser
 
@@ -11,11 +11,8 @@ import Text.XML.HXT.DOM.TypeDefs
 
 import System.Directory
 
-import Webrexp.Log
 import Webrexp.ResourcePath
 import Webrexp.GraphWalker
-
-import Debug.Trace
 
 type HxtNode = NTree XNode
 
@@ -28,7 +25,6 @@ instance GraphWalker HxtNode where
 
 findAttribute :: String -> HxtNode -> Maybe String
 findAttribute attrName (NTree (XTag _ attrList) _) =
-   -- (\a -> trace ("]] " ++ attrName ++ "=" ++ show a) a) $ 
     attrFinder attrList
   where attrFinder [] = Nothing
         attrFinder (NTree (XAttr name) [value]:_)
@@ -38,7 +34,7 @@ findAttribute _ _ = Nothing
 
 findChildren :: HxtNode -> [HxtNode]
 findChildren (NTree (XTag _ _) children) = children
-findChildren n = []
+findChildren _ = []
 
 getName :: HxtNode -> Maybe String
 getName (NTree (XTag name _) _) = Just $ localPart name
@@ -55,29 +51,27 @@ parseToHTMLNode txt = case findFirstNamed "html" nodes of
     where nodes = parseHtmlContent txt
 
 -- | Given a resource path, do the required loading
-loadHtml :: ResourcePath -> IO (Maybe (ResourcePath, HxtNode))
-loadHtml (Local s) = do
-    infoLog $ "Opening file : '" ++ s ++ "'"
-    infoLog $ "-------------------------------------"
-    realFile <- doesFileExist s
+loadHtml :: (MonadIO m)
+         => Logger -> Logger -> Logger -> ResourcePath
+         -> m (Maybe (ResourcePath, HxtNode))
+loadHtml logger _errLog _verbose (Local s) = do
+    liftIO . logger $ "Opening file : '" ++ s ++ "'"
+    realFile <- liftIO $ doesFileExist s
     if not realFile
        then return Nothing
-       else readFile s >>= (return . Just
-                                  . (,) (Local s) 
-                                  . parseToHTMLNode)
+       else do file <- liftIO $ readFile s
+       	       return . Just . (,) (Local s) 
+                             $ parseToHTMLNode file
 
-loadHtml (Remote uri) = do
-  infoLog $ "-------------------------------------"
-  infoLog $ "Downloading URL : '" ++ show uri ++ "'"
-  threadDelay 1500
-  (u, rsp) <- browse $ do
+loadHtml logger errLog verbose (Remote uri) = do
+  liftIO . logger $ "Downloading URL : '" ++ show uri ++ "'"
+  (u, rsp) <- liftIO . browse $ do
         setAllowRedirects True
-        setErrHandler networkError
-        setOutHandler networkInfo
+        setErrHandler errLog
+        setOutHandler verbose
         request $ defaultGETRequest uri
 
-  infoLog $ "Downloaded (" ++ show uri ++ ")"
-  infoLog $ "-------------------------------------"
+  liftIO . verbose $ "Downloaded (" ++ show uri ++ ")"
   return . Just
          . (,) (Remote u) 
          . parseToHTMLNode $ rspBody rsp
