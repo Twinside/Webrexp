@@ -72,13 +72,13 @@ is the root of the pointed document.
 You might want to further refine your currently selected node, and checking
 some attributes of it, for this you can use action.
 
-    div img { @alt != "" }
+    div img { @alt /= "" }
 
 the actions are between `{}`, everything that's between `{}` can exprimate some
 comparison. You can directly query attributes and basic expression syntax is
 provided. You can chain comparison with `;`
 
-    div img { @alt != ""; width > 10; height < 2000 }
+    div img { @alt /= ""; width > 10; height < 2000 }
 
 ### Dumping content
 
@@ -90,7 +90,7 @@ Dumping content is a simple action called `.`
 
 As all actions, it's put into `{}`, you can still filter before dumping :
 
-    img {@alt != ""; .}
+    img {@alt /= ""; .}
 
 If the selected nodes have an `src` attribute, it's what is dumped, otherwise
 some text approximation is made and displayed on screen.
@@ -128,6 +128,15 @@ says that at least one valid execution must occur.
 
     "http://somesite.com" > (head title {.}; a >)+
 
+Real examples
+-------------
+Here some real-world examples used to dump some... comics
+
+    webrexp '"http://www.someComic.com/chapterone/" > (div.comicpane img {.}; div.nav-next a >)*'
+    webrexp '"http://www.someOtherComic.com/" > div.nav-first a > (div#comic img {.}; div.nav-next a >)*'
+
+TODO : tweak threadDelay to better control server hammering.
+
 Webrexp Reference
 =================
 
@@ -158,3 +167,64 @@ Design
 Expression grammar
 ------------------
 
+    webrexp ::= exprPath (';' exprPath)*
+    
+    noderange ::= [0-9]
+                | [0-9] '-' [0-9]
+    
+    
+    ranges ::= noderange
+             | ranges ',' noderange
+    
+    webident ::= [a-zA-Z0-9-_]+
+    
+    webref ::= webident
+             | webref '.' webident
+             | webref '@' webident
+             | webref '#' webident
+        
+    
+    attribute ::= '@' webident
+    
+    actionTerm ::= attribute
+                 | '(' actionExpr ')'
+                 | stringLiteral
+                 | natural
+                 | '.'
+    
+    actionExpr ::= actionTerm
+                 | actionExpr '&' actionExpr
+                 | actionExpr '|' actionExpr
+    
+                 | actionExpr '=' actionExpr
+                 | actionExpr '/=' actionExpr
+                 | actionExpr '<' actionExpr
+                 | actionExpr '>' actionExpr
+                 | actionExpr '<=' actionExpr
+                 | actionExpr '>=' actionExpr
+    
+                 | actionExpr '+' actionExpr
+                 | actionExpr '-' actionExpr
+    
+                 | actionExpr '*' actionExpr
+                 | actionExpr '/' actionExpr
+    
+    actionList ::= actionExpr (';' actionExpr)*
+    
+    exprPath ::= expr+
+    
+    expr ::= expterm
+           | expr '*'
+           | expr '+'
+           | expr '!'
+    
+    expterm ::= '(' webrexp ')'
+              | '{' actionList '}'
+              | '[' ranges ']'
+              | '>'
+              | '^'
+              | '|'
+              | '<'
+              | stringLiteral
+              | webref
+            
