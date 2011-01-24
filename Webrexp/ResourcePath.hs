@@ -60,7 +60,7 @@ dumpResourcePath (Remote a) =
 downloadBinary :: URI -> FilePath -> IO ()
 downloadBinary url filename = do
     infoLog $ "Downloading '" ++ show url ++ "' in '" ++ filename
-    threadDelay 500
+    threadDelay 1500
     rsp <- Network.HTTP.simpleHTTP $ mkRequest GET url
     body <- getResponseBody rsp
     B.writeFile filename body

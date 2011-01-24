@@ -7,6 +7,7 @@ module Webrexp.Eval
 
 import Debug.Trace
 import Control.Applicative
+import Control.Monad
 import Control.Monad.IO.Class
 import Data.Maybe ( catMaybes )
 
@@ -33,8 +34,11 @@ evalBranches :: (GraphWalker node)
 evalBranches _ [] = return True
 evalBranches isTail [x] = do
     popCurrentState
-    pushCurrentState 
+    -- If we are the tail, we can drop
+    -- the context without problem
+    when (not isTail) pushCurrentState 
     evalWebRexp isTail x
+
 evalBranches isTail (x:xs) = do
     popCurrentState
     pushCurrentState 
@@ -92,18 +96,18 @@ evalTillFalse = applyFunTillFalse evalWebRexp
 searchRefIn :: (GraphWalker node)
             => WebRef -> [NodeContext node] -> [NodeContext node]
 searchRefIn ref = concatMap (searchRef ref)
-  where searchRef (Elem s) n = (\a -> trace ("ELEM: " ++ show(length a)) a)
+  where searchRef (Elem s) n = -- (\a -> trace ("ELEM: " ++ show(length a)) a)
             [ NodeContext {
                 parents = subP ++ parents n,
                 this = sub,
                 rootRef = rootRef n
             }  | (sub, subP) <- findNamed s $ this n]
-        searchRef (OfClass r s) n = (\a -> trace ("CLASS: " ++ show(length a)) a)
+        searchRef (OfClass r s) n = -- (\a -> trace ("CLASS: " ++ show(length a)) a)
             [v | v <- searchRef r n, attribOf "class" (this v) == Just s]
-        searchRef (Attrib  r s) n = (\a -> trace ("ATTRIB: " ++ show(length a)) a)
+        searchRef (Attrib  r s) n = -- (\a -> trace ("ATTRIB: " ++ show(length a)) a)
             [v | v <- searchRef r n, attribOf s (this v) /= Nothing]
-        searchRef (OfName  r s) n =(\a -> trace ("NAME: " ++ show(length a)) a)
-            [v | v <- searchRef r n, attribOf "name" (this v) == Just s]
+        searchRef (OfName  r s) n = -- (\a -> trace ("NAME: " ++ show(length a)) a)
+            [v | v <- searchRef r n, attribOf "id" (this v) == Just s]
 
 -- | Evaluate an expression, the boolean is here to propagate
 -- the idea of 'tail' call, if we are at the tail of the expression
@@ -151,9 +155,9 @@ evalWebRexp _ (Ref ref) = do
     case st of
          Nodes ns -> do
              let rezNode = searchRefIn ref ns
-             liftIO . debugLog $ show $ map (nameOf . this) ns
-             liftIO . debugLog $ show $ map (nameOf . this) rezNode
-             liftIO . debugLog $ show $ map (map nameOf . childrenOf . this) rezNode
+             {-liftIO . debugLog $ show $ map (nameOf . this) ns-}
+             {-liftIO . debugLog $ show $ map (nameOf . this) rezNode-}
+             {-liftIO . debugLog $ show $ map (map nameOf . childrenOf . this) rezNode-}
              liftIO . debugLog $ ">>> found " ++ show (length ns) 
                                               ++ "->" 
                                               ++ show (length rezNode) 

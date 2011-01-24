@@ -38,7 +38,7 @@ findAttribute _ _ = Nothing
 
 findChildren :: HxtNode -> [HxtNode]
 findChildren (NTree (XTag _ _) children) = children
-findChildren n = trace (":NOCHILD: " ++ show (nameOf n)) []
+findChildren n = []
 
 getName :: HxtNode -> Maybe String
 getName (NTree (XTag name _) _) = Just $ localPart name
@@ -69,7 +69,7 @@ loadHtml (Local s) = do
 loadHtml (Remote uri) = do
   infoLog $ "-------------------------------------"
   infoLog $ "Downloading URL : '" ++ show uri ++ "'"
-  threadDelay 500
+  threadDelay 1500
   (u, rsp) <- browse $ do
         setAllowRedirects True
         setErrHandler networkError

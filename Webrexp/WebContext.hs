@@ -20,6 +20,7 @@ module Webrexp.WebContext
     -- ** State manipulation functions
     , pushCurrentState 
     , popCurrentState 
+    , dropContextStack
     , getEvalState 
     , setEvalState 
 
@@ -111,6 +112,10 @@ emptyContext = Context
     { executionRoot = Local ""
     , contextStack = []
     , currentNodes = None }
+
+dropContextStack :: (Monad m) => WebContextT node m ()
+dropContextStack = WebContextT $ \c ->
+        return ((), c{ contextStack = [] })
 
 pushCurrentState :: (Monad m) => WebContextT node m ()
 pushCurrentState = WebContextT $ \c ->
