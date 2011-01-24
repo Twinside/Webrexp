@@ -33,6 +33,7 @@ data Conf = Conf
     , verbose :: Bool
     , quiet :: Bool
     , expr :: String
+    , showHelp :: Bool
     }
 
 defaultConf :: Conf
@@ -43,6 +44,7 @@ defaultConf = Conf
     , verbose = False
     , quiet = False
     , expr = ""
+    , showHelp = False
     }
 
 -- | Prepare a webrexp.

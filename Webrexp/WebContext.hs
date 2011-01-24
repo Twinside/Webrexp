@@ -17,6 +17,7 @@ module Webrexp.WebContext
     , setOutput 
     , getHttpDelay 
     , setHttpDelay 
+    , isVerbose
 
     -- * User function
     , evalWithEmptyContext
@@ -69,7 +70,7 @@ data EvalState node =
     | Strings [String]
     | None
 
-data LogLevel = Quiet | Normal | Verbose
+data LogLevel = Quiet | Normal | Verbose deriving (Eq)
 
 data Context node = Context
     { currentNodes :: EvalState node
@@ -153,6 +154,10 @@ setLogLevel :: (Monad m) => LogLevel -> WebContextT node m ()
 setLogLevel lvl = WebContextT $ \c ->
     return ((), c{logLevel = lvl})
 
+isVerbose :: (Monad m) => WebContextT node m Bool
+isVerbose = WebContextT $ \c -> 
+    return (logLevel c == Verbose, c)
+
 pushCurrentState :: (Monad m) => WebContextT node m ()
 pushCurrentState = WebContextT $ \c ->
         return ((), c{ contextStack = 
@@ -205,8 +210,8 @@ prepareLogger :: (Monad m)
               => WebContextT node m (Logger, Logger, Logger)
 prepareLogger = WebContextT $ \c ->
     let silenceLog = \_ -> return ()
-        errLog = hPutStr stderr
-        normalLog = hPutStr stdout
+        errLog = hPutStrLn stderr
+        normalLog = hPutStrLn stdout
     in case logLevel c of
       Quiet -> return ((silenceLog, errLog, silenceLog), c)
       Normal -> return ((normalLog, errLog, silenceLog), c)

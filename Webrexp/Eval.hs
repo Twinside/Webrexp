@@ -145,12 +145,14 @@ evalWebRexp _ (Action action) = do
       Strings strs -> do
         rez <- filterM (\e -> do rez <- evalAction action $ ElemString e
                                  return $ isActionResultValid rez) strs
+        debugLog $ ">>> left " ++ show (length rez)
         setEvalState $ Strings rez
         hasNodeLeft
 
       Nodes nds -> do
         rez <- filterM (\e -> do rez <- evalAction action $ ElemNode e
                                  return $ isActionResultValid rez) nds
+        debugLog $ ">>> left " ++ show (length rez)
         setEvalState $ Nodes rez
         hasNodeLeft
 
@@ -335,67 +337,46 @@ evalAction (ActionExprs actions) e = evaluator actions
               	 else return rez
 
 
-evalAction (CstI i) _ =
-    debugLog "@ int" >>
-    return (AInt i)
-evalAction (CstS s) _ =
-    debugLog "@ str" >>
-    return (AString s)
+evalAction (CstI i) _ = return (AInt i)
+evalAction (CstS s) _ = return (AString s)
 evalAction OutputAction e =
-    debugLog "@ ." >>
     dumpContent e
 
 evalAction (ARef _) (ElemString _) = do
-    debugLog "@ @..."
     return ATypeError
 
 evalAction (ARef r) (ElemNode n) = do
     case attribOf r (this n) of
-      Nothing ->
-        debugLog "@ @..." >> return (ABool False)
-      Just s -> do
-          debugLog $ "@ @" ++ r ++ "=" ++ s
-          return $ AString s
+      Nothing -> return (ABool False)
+      Just s -> return $ AString s
 
 evalAction (BinOp OpAdd a b) e =
-    debugLog "@ '+'" >>
     binArith (+) <$> evalAction a e <*> evalAction b e
 evalAction (BinOp OpSub a b) e =
-    debugLog "@ '-'" >>
     binArith (-) <$> evalAction a e <*> evalAction b e
 evalAction (BinOp OpMul a b) e =
-    debugLog "@ '*'" >>
     binArith (*) <$> evalAction a e <*> evalAction b e
 evalAction (BinOp OpDiv a b) e =
-    debugLog "@ '/'" >>
     binArith div <$> evalAction a e <*> evalAction b e
 
 evalAction (BinOp OpLt a b) e =
-    debugLog "@ '<'" >>
     valComp (<) <$> evalAction a e <*> evalAction b e
 evalAction (BinOp OpLe a b) e =
-    debugLog "@ '<='" >>
     valComp (<=) <$> evalAction a e <*> evalAction b e
 evalAction (BinOp OpGt a b) e =
-    debugLog "@ '>'" >>
     valComp (>) <$> evalAction a e <*> evalAction b e
 evalAction (BinOp OpGe a b) e =
-    debugLog "@ '>='" >>
     valComp (>=) <$> evalAction a e <*> evalAction b e
 
 evalAction (BinOp OpEq a b) e =
-    debugLog "@ '='" >>
     binComp <$> evalAction a e <*> evalAction b e
 evalAction (BinOp OpNe a b) e =
-    debugLog "@ '/='" >>
     valNot <$> (binComp <$> evalAction a e <*> evalAction b e)
         where valNot (ABool f) = ABool $ not f
               valNot el = el
 
 evalAction (BinOp OpAnd a b) e =
-    debugLog "@ '&'" >>
     boolComp (&&) <$> evalAction a e <*> evalAction b e
 evalAction (BinOp OpOr  a b) e =
-    debugLog "@ '|'" >>
     boolComp (||) <$> evalAction a e <*> evalAction b e
 

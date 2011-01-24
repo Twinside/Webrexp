@@ -141,6 +141,17 @@ TODO : tweak threadDelay to better control server hammering.
 
 Webrexp Reference
 =================
+Command line ref
+----------------
+
+    Webrexp
+      -o FILE   --output=FILE  output FILE
+      -f FILE   --file=FILE    input FILE, use - for stdin
+      -v        --verbose      Display many information
+      -q        --quiet        Remain practically silent
+      -h        --help         Display help (this screen)
+      -d Delay  --delay=Delay  Time to wait between HTTP request (ms)
+
 
 Expression grammar
 ------------------

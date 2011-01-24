@@ -9,6 +9,7 @@ module Webrexp.Log (
     ) where
 
 import System.IO
+import Control.Monad
 import Control.Monad.IO.Class
 import Webrexp.WebContext
 
@@ -25,7 +26,9 @@ networkError :: String -> WebCrawler node ()
 networkError = liftIO . hPutStr stderr
 
 debugLog :: String -> WebCrawler node ()
-debugLog = liftIO . putStrLn
+debugLog str = do
+    verb <- isVerbose
+    when (verb) (liftIO $ putStrLn str)
 
 textOutput :: String -> WebCrawler node ()
 textOutput = liftIO . putStrLn
