@@ -2,7 +2,7 @@ module Webrexp.Eval
     (
     -- * Functions
     evalWebRexp,
-    evalAction 
+    evalAction
     ) where
 
 import Control.Applicative
@@ -35,12 +35,12 @@ evalBranches isTail [x] = do
     popCurrentState
     -- If we are the tail, we can drop
     -- the context without problem
-    when (not isTail) pushCurrentState 
+    when (not isTail) pushCurrentState
     evalWebRexp isTail x
 
 evalBranches isTail (x:xs) = do
     popCurrentState
-    pushCurrentState 
+    pushCurrentState
     valid <- evalWebRexp False x
     if valid
        then evalBranches isTail xs
@@ -52,7 +52,7 @@ applyFunTillFalse :: (GraphWalker node)
 applyFunTillFalse f isTail obj = do
     valid <- f isTail obj
     if valid then applyFunTillFalse f isTail obj
-             else return False
+             else return True
 
 -- | For the current state, filter the value to keep
 -- only the values which are included in the node
@@ -138,9 +138,22 @@ evalWebRexp _ (Str str) = do
 
 evalWebRexp _ (Action action) = do
     debugLog "> '{...}'"
-    rez <- evalAction action
-    return $ isActionResultValid rez
-    
+    st <- getEvalState
+    case st of
+      None -> return False
+
+      Strings strs -> do
+        rez <- filterM (\e -> do rez <- evalAction action $ ElemString e
+                                 return $ isActionResultValid rez) strs
+        setEvalState $ Strings rez
+        hasNodeLeft
+
+      Nodes nds -> do
+        rez <- filterM (\e -> do rez <- evalAction action $ ElemNode e
+                                 return $ isActionResultValid rez) nds
+        setEvalState $ Nodes rez
+        hasNodeLeft
+
 evalWebRexp _ (Unique _subs) = do
     debugLog "> '!'"
     error "Unimplemented - Unique (webrexp)"
@@ -155,9 +168,9 @@ evalWebRexp _ (Ref ref) = do
              {-liftIO . debugLog $ show $ map (nameOf . this) ns-}
              {-liftIO . debugLog $ show $ map (nameOf . this) rezNode-}
              {-liftIO . debugLog $ show $ map (map nameOf . childrenOf . this) rezNode-}
-             debugLog $ ">>> found " ++ show (length ns) 
-                                     ++ "->" 
-                                     ++ show (length rezNode) 
+             debugLog $ ">>> found " ++ show (length ns)
+                                     ++ "->"
+                                     ++ show (length rezNode)
                                      ++ " nodes"
              setEvalState $ Nodes rezNode
              return . not $ null rezNode
@@ -186,9 +199,9 @@ evalWebRexp _ PreviousSibling = do
 
 evalWebRexp _ Parent = do
   debugLog "> '<'"
-  mapCurrentNodes parentExtractor 
+  mapCurrentNodes parentExtractor
   hasNodeLeft
-    where parentExtractor node = 
+    where parentExtractor node =
            case parents node of
              []       -> Nothing
              (n,_):ps ->
@@ -236,7 +249,7 @@ diggLinks _ = do
 siblingAccessor :: (GraphWalker node)
                 => Int -> NodeContext node -> Maybe (NodeContext node)
 siblingAccessor 0   node = Just $ node
-siblingAccessor idx node = 
+siblingAccessor idx node =
     case parents node of
       [] -> Nothing
       (n,i):ps ->
@@ -293,72 +306,96 @@ isActionResultValid (AInt 0) = False
 isActionResultValid ATypeError = False
 isActionResultValid _ = True
 
-dumpContent :: (GraphWalker node) => WebCrawler node ActionValue
-dumpContent = do
-    st <- getEvalState
-    case st of
-      None -> return ATypeError
-      Nodes ns ->
-          mapM_ dumpNode ns >> return (ABool True)
+data Elem node = ElemNode (NodeContext node)
+               | ElemString String
 
-      Strings str ->
-          mapM_ dumpString str >> return (ABool True)
-          
-dumpNode :: (GraphWalker node)
-         => NodeContext node -> WebCrawler node ()
-dumpNode n =
-  case attribOf "src" (this n) >>= toRezPath of
-    Nothing -> dumpString $ valueOf (this n)
-    Just r -> dumpResourcePath (infoLog) $ (rootRef n) <//> r
+dumpContent :: (GraphWalker node) => Elem node -> WebCrawler node ActionValue
+dumpContent (ElemNode ns) =
+  case attribOf "src" (this ns) >>= toRezPath of
+    Nothing -> do
+        textOutput $ valueOf (this ns)
+        return (ABool True)
+    Just r -> do
+        dumpResourcePath (infoLog) $ (rootRef ns) <//> r
+        return (ABool True)
 
-dumpString :: String -> WebCrawler node ()
-dumpString s = textOutput s
+dumpContent (ElemString str) =
+    textOutput str >> return (ABool True)
 
 -- | Evaluate embedded action in WebRexp
 evalAction :: (GraphWalker node)
-           => ActionExpr -> WebCrawler node ActionValue
-evalAction (ActionExprs actions) = evaluator actions
+           => ActionExpr -> Elem node -> WebCrawler node ActionValue
+evalAction (ActionExprs actions) e = evaluator actions
     where evaluator [] = return $ ABool True
-          evaluator [x] = evalAction x
+          evaluator [x] = evalAction x e
           evaluator (x:xs) = do
-              rez <- evalAction x
+              rez <- evalAction x e
               if isActionResultValid rez
               	 then evaluator xs
               	 else return rez
 
 
-evalAction (CstI i) = return $ AInt i
-evalAction (CstS s) = return $ AString s
-evalAction (ARef _) = return ATypeError
-evalAction OutputAction = dumpContent
+evalAction (CstI i) _ =
+    debugLog "@ int" >>
+    return (AInt i)
+evalAction (CstS s) _ =
+    debugLog "@ str" >>
+    return (AString s)
+evalAction OutputAction e =
+    debugLog "@ ." >>
+    dumpContent e
 
-evalAction (BinOp OpAdd a b) = 
-    binArith (+) <$> evalAction a <*> evalAction b 
-evalAction (BinOp OpSub a b) = 
-    binArith (-) <$> evalAction a <*> evalAction b 
-evalAction (BinOp OpMul a b) = 
-    binArith (*) <$> evalAction a <*> evalAction b 
-evalAction (BinOp OpDiv a b) = 
-    binArith div <$> evalAction a <*> evalAction b
+evalAction (ARef _) (ElemString _) = do
+    debugLog "@ @..."
+    return ATypeError
 
-evalAction (BinOp OpLt a b) = 
-    valComp (<) <$> evalAction a <*> evalAction b  
-evalAction (BinOp OpLe a b) = 
-    valComp (<=) <$> evalAction a <*> evalAction b  
-evalAction (BinOp OpGt a b) = 
-    valComp (>) <$> evalAction a <*> evalAction b  
-evalAction (BinOp OpGe a b) = 
-    valComp (>=) <$> evalAction a <*> evalAction b
+evalAction (ARef r) (ElemNode n) = do
+    case attribOf r (this n) of
+      Nothing ->
+        debugLog "@ @..." >> return (ABool False)
+      Just s -> do
+          debugLog $ "@ @" ++ r ++ "=" ++ s
+          return $ AString s
 
-evalAction (BinOp OpEq a b) =
-    binComp <$> evalAction a <*> evalAction b
-evalAction (BinOp OpNe a b) =
-    valNot <$> (binComp <$> evalAction a <*> evalAction b)
+evalAction (BinOp OpAdd a b) e =
+    debugLog "@ '+'" >>
+    binArith (+) <$> evalAction a e <*> evalAction b e
+evalAction (BinOp OpSub a b) e =
+    debugLog "@ '-'" >>
+    binArith (-) <$> evalAction a e <*> evalAction b e
+evalAction (BinOp OpMul a b) e =
+    debugLog "@ '*'" >>
+    binArith (*) <$> evalAction a e <*> evalAction b e
+evalAction (BinOp OpDiv a b) e =
+    debugLog "@ '/'" >>
+    binArith div <$> evalAction a e <*> evalAction b e
+
+evalAction (BinOp OpLt a b) e =
+    debugLog "@ '<'" >>
+    valComp (<) <$> evalAction a e <*> evalAction b e
+evalAction (BinOp OpLe a b) e =
+    debugLog "@ '<='" >>
+    valComp (<=) <$> evalAction a e <*> evalAction b e
+evalAction (BinOp OpGt a b) e =
+    debugLog "@ '>'" >>
+    valComp (>) <$> evalAction a e <*> evalAction b e
+evalAction (BinOp OpGe a b) e =
+    debugLog "@ '>='" >>
+    valComp (>=) <$> evalAction a e <*> evalAction b e
+
+evalAction (BinOp OpEq a b) e =
+    debugLog "@ '='" >>
+    binComp <$> evalAction a e <*> evalAction b e
+evalAction (BinOp OpNe a b) e =
+    debugLog "@ '/='" >>
+    valNot <$> (binComp <$> evalAction a e <*> evalAction b e)
         where valNot (ABool f) = ABool $ not f
-              valNot e = e
+              valNot el = el
 
-evalAction (BinOp OpAnd a b) =
-    boolComp (&&) <$> evalAction a <*> evalAction b
-evalAction (BinOp OpOr  a b) =
-    boolComp (||) <$> evalAction a <*> evalAction b
+evalAction (BinOp OpAnd a b) e =
+    debugLog "@ '&'" >>
+    boolComp (&&) <$> evalAction a e <*> evalAction b e
+evalAction (BinOp OpOr  a b) e =
+    debugLog "@ '|'" >>
+    boolComp (||) <$> evalAction a e <*> evalAction b e
 

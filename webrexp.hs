@@ -98,6 +98,8 @@ evalWebRexpWithConf conf =
 
         in do liftIO . putStrLn $ "Parsed: " ++ show wexpr
               rez <- evalWithEmptyContext crawled
-              hClose $ output conf
+              if output conf /= stdout
+                then hClose $ output conf
+                else return ()
               return rez
 
