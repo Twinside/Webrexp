@@ -164,6 +164,7 @@ expterm = parens webrexp
        <|> braces (Action <$> actionList)
        <|> brackets rangeParser
        <|> webrexpOp
+       <|> (Str <$> stringLiteral)
        <|> (Ref <$> webref)
        <?> "expterm"
         

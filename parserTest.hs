@@ -2,8 +2,8 @@
 import Control.Monad
 import Text.Parsec
 
+import Webrexp
 import Webrexp.Exprtypes
-import Webrexp.Parser
 
 tests :: [String]
 tests = [ "img[4]"
@@ -23,6 +23,8 @@ tests = [ "img[4]"
         , "dabada#bang"
         , "dabada.poum#bang"
         , "rootpage > div | span |[4] ^"
+        , "\"http://www.google.com\" >"
+        , "\"http://www.stringtheorycomic.com/comics/chapterone/chapterone/\" > (div.comic img {.}; div.nav-next a >)*"
         ]
 
 main :: IO ()
@@ -31,6 +33,6 @@ main = do
         putStrLn "\n--------------------------------------------"
         putStrLn $ "expr: " ++ a
         putStrLn "---------------"
-        print $ runParser webrexp () a a) tests
+        print $ parseWebRexp a) tests
     return ()
 

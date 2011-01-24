@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 module Webrexp.HxtNode( HxtNode ) where
 
+import Control.Concurrent
 import Network.HTTP
 import Network.Browser
 
@@ -62,6 +63,7 @@ loadHtml (Local s) = do
 
 loadHtml (Remote uri) = do
   infoLog $ "Downloading URL : '" ++ show uri ++ "'"
+  threadDelay 500
   (u, rsp) <- browse $ do
         setAllowRedirects True
         setErrHandler networkError

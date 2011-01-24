@@ -7,6 +7,7 @@ module Webrexp.ResourcePath
     , dumpResourcePath
     ) where
 
+import Control.Concurrent
 import Data.Maybe
 import Network.HTTP
 import Network.URI
@@ -59,6 +60,7 @@ dumpResourcePath (Remote a) =
 downloadBinary :: URI -> FilePath -> IO ()
 downloadBinary url filename = do
     infoLog $ "Downloading '" ++ show url ++ "' in '" ++ filename
+    threadDelay 500
     rsp <- Network.HTTP.simpleHTTP $ mkRequest GET url
     body <- getResponseBody rsp
     B.writeFile filename body

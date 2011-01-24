@@ -39,9 +39,14 @@ evalParsedWebRexp expr = evalWithEmptyContext crawled
 evalWebRexp :: String -> IO Bool
 evalWebRexp str = 
   case runParser webRexpParser () "expr" str of
-    Left _ -> return False
+    Left err -> do
+        putStrLn "Parsing error :\n"
+        putStrLn $ show err
+        return False
+
     Right expr ->
         let crawled :: WebCrawler HxtNode Bool = 
                 E.evalWebRexp True expr
-        in evalWithEmptyContext crawled
+        in do putStrLn $ "Parsed: " ++ show expr
+              evalWithEmptyContext crawled
 
