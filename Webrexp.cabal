@@ -18,6 +18,8 @@ Executable webrexp
                  network >= 2.2.1.7 && < 2.3,
                  directory >= 1.0,
                  bytestring >= 0.9.1.7 && < 1.0,
+                 containers >= 0.3,
+                 array >= 0.3,
                  filepath
                  -- Webrexp
 
@@ -37,5 +39,7 @@ Library
                  network >= 2.2.1.7 && < 2.3,
                  directory >= 1.0,
                  bytestring >= 0.9.1.7 && < 1.0,
+                 containers >= 0.3,
+                 array >= 0.3,
                  filepath
 

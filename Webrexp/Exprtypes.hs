@@ -8,9 +8,10 @@ module Webrexp.Exprtypes
     , WebRexp (..)
     -- * Functions
     , simplifyNodeRanges 
+    , foldWebRexp
     ) where
 
-import Data.List( sort )
+import Data.List( sort, mapAccumR )
 
 -- | represent an element
 data WebRef =
@@ -114,8 +115,12 @@ data WebRexp =
     | Star WebRexp
     -- | ... +
     | Plus WebRexp
+
     -- | ... !
-    | Unique WebRexp
+    -- Possess an unique index to differentiate all the differents
+    -- uniques. Negative value are considered invalid, all positive or
+    -- null one are accepted.
+    | Unique Int WebRexp
     -- | "..."
     | Str String
     -- { ... }
@@ -142,4 +147,17 @@ data WebRexp =
     -- Select the parent node
     | Parent
     deriving (Eq, Show)
+
+foldWebRexp :: (a -> WebRexp -> (a, WebRexp)) -> a -> WebRexp -> (a, WebRexp)
+foldWebRexp f acc (Branch subs) = f acc' $ Branch subs'
+    where (acc', subs') = mapAccumR (foldWebRexp f) acc subs
+foldWebRexp f acc (List subs) = f acc' $ List subs'
+    where (acc', subs') = mapAccumR (foldWebRexp f) acc subs
+foldWebRexp f acc (Star sub) = f acc' $ Star sub'
+    where (acc', sub') = foldWebRexp f acc sub
+foldWebRexp f acc (Plus sub) = f acc' $ Plus sub'
+    where (acc', sub') = foldWebRexp f acc sub
+foldWebRexp f acc (Unique i sub) = f acc' $ Unique i sub'
+    where (acc', sub') = foldWebRexp f acc sub
+foldWebRexp f acc e = f acc e
 

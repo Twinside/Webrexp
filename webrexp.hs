@@ -61,7 +61,7 @@ parseWebRexp str =
 evalParsedWebRexp :: WebRexp -> IO Bool
 evalParsedWebRexp wexpr = evalWithEmptyContext crawled
  where crawled :: WebCrawler HxtNode Bool = 
-            E.evalWebRexp True wexpr
+            E.evalWebRexp wexpr
 
 -- | Simplest function to eval a webrexp.
 -- Return the evaluation status of the webrexp,
@@ -76,7 +76,7 @@ evalWebRexp str =
 
     Right wexpr ->
         let crawled :: WebCrawler HxtNode Bool = 
-                E.evalWebRexp True wexpr
+                E.evalWebRexp wexpr
         in evalWithEmptyContext crawled
 
 evalWebRexpWithConf :: Conf -> IO Bool
@@ -94,7 +94,7 @@ evalWebRexpWithConf conf =
               setHttpDelay $ hammeringDelay conf
               when (quiet conf) (setLogLevel Quiet)
               when (verbose conf) (setLogLevel Verbose)
-              E.evalWebRexp True wexpr
+              E.evalWebRexp wexpr
 
         in do rez <- evalWithEmptyContext crawled
               if output conf /= stdout

@@ -59,7 +59,7 @@ lexer  = P.makeTokenParser
 -----------------------------------------------------------
 webrexpCombinator :: OperatorTable String st Identity WebRexp
 webrexpCombinator =
-    [ [ postfix "!" Unique
+    [ [ postfix "!" (Unique $ negate 1)
       , postfix "*" Star
       , postfix "+" Plus ] ]
 

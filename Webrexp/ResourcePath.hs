@@ -5,6 +5,7 @@ module Webrexp.ResourcePath
     , toRezPath
     , (<//>)
     , dumpResourcePath
+    , rezPathToString
     ) where
 
 import Control.Concurrent
@@ -20,6 +21,10 @@ data ResourcePath =
       Local FilePath
     | Remote URI
     deriving (Eq, Show)
+
+rezPathToString :: ResourcePath -> String
+rezPathToString (Local p) = p
+rezPathToString (Remote uri) = show uri
 
 toRezPath :: String -> Maybe ResourcePath
 toRezPath s = case (parseURI s, isValid s) of

@@ -19,9 +19,9 @@ import Webrexp.Log
 evalList :: (GraphWalker node)
          => Bool -> [WebRexp] -> WebCrawler node Bool
 evalList _ [] = return True
-evalList isTail [x] = evalWebRexp isTail x
+evalList isTail [x] = evalWebRexp' isTail x
 evalList isTail (x:xs) = do
-    valid <- evalWebRexp False x
+    valid <- evalWebRexp' False x
     if valid
        then evalList isTail xs
        else return False
@@ -36,12 +36,12 @@ evalBranches isTail [x] = do
     -- If we are the tail, we can drop
     -- the context without problem
     when (not isTail) pushCurrentState
-    evalWebRexp isTail x
+    evalWebRexp' isTail x
 
 evalBranches isTail (x:xs) = do
     popCurrentState
     pushCurrentState
-    valid <- evalWebRexp False x
+    valid <- evalWebRexp' False x
     if valid
        then evalBranches isTail xs
        else return False
@@ -85,7 +85,7 @@ filterNodes ranges = getEvalState >>= \state ->
 -- | repeatidly eval the webrexp until a false is returned.
 evalTillFalse :: (GraphWalker node)
               => Bool -> WebRexp -> WebCrawler node Bool
-evalTillFalse = applyFunTillFalse evalWebRexp
+evalTillFalse = applyFunTillFalse evalWebRexp'
 
 
 -- | Given a node search for valid children, check for their
@@ -106,37 +106,46 @@ searchRefIn ref = concatMap (searchRef ref)
         searchRef (OfName  r s) n = -- (\a -> trace ("NAME: " ++ show(length a)) a)
             [v | v <- searchRef r n, attribOf "id" (this v) == Just s]
 
+evalWebRexp :: (GraphWalker node) => WebRexp -> WebCrawler node Bool
+evalWebRexp rexp = do
+    setUniqueBucketCount count
+    debugLog $ "Parsed as: " ++ show neorexp
+    evalWebRexp' True neorexp
+    where (count, neorexp) = foldWebRexp uniqueCounter 0 rexp
+          uniqueCounter acc (Unique _ sub) = (acc + 1, Unique acc sub)
+          uniqueCounter acc e = (acc, e)
+
 -- | Evaluate an expression, the boolean is here to propagate
 -- the idea of 'tail' call, if we are at the tail of the expression
 -- we can discard some elements safely and thus reduce memory
 -- usage (which can be important)
-evalWebRexp :: (GraphWalker node) => Bool -> WebRexp -> WebCrawler node Bool
-evalWebRexp isTail (Branch subs) = do
+evalWebRexp' :: (GraphWalker node) => Bool -> WebRexp -> WebCrawler node Bool
+evalWebRexp' isTail (Branch subs) = do
     debugLog "> '[... ; ...]'"
     pushCurrentState
     evalBranches isTail subs
 
-evalWebRexp isTail (List subs) = do
+evalWebRexp' isTail (List subs) = do
     debugLog "> '[...]'"
     evalList isTail subs
 
-evalWebRexp isTail (Star subs) = do
+evalWebRexp' isTail (Star subs) = do
     debugLog "> '...*'"
     evalTillFalse isTail subs
 
-evalWebRexp isTail (Plus subs) = do
+evalWebRexp' isTail (Plus subs) = do
     debugLog "> '...+'"
-    once <- evalWebRexp isTail subs
+    once <- evalWebRexp' isTail subs
     if once then do _ <- evalTillFalse isTail subs
                     return True
             else return False
 
-evalWebRexp _ (Str str) = do
+evalWebRexp' _ (Str str) = do
     debugLog "> '\"...\"'"
     setEvalState $ Strings [str]
     return True
 
-evalWebRexp _ (Action action) = do
+evalWebRexp' _ (Action action) = do
     debugLog "> '{...}'"
     st <- getEvalState
     case st of
@@ -156,12 +165,35 @@ evalWebRexp _ (Action action) = do
         setEvalState $ Nodes rez
         hasNodeLeft
 
-evalWebRexp _ (Unique _subs) = do
-    debugLog "> '!'"
-    error "Unimplemented - Unique (webrexp)"
-    -- return False
+evalWebRexp' isTail (Unique bucket sub) = do
+    debugLog $ "> '!' (" ++ show bucket ++ ")"
+    st <- getEvalState
+    case st of
+      None -> return False
+      Strings str -> do
+          str' <- filterM (liftM not . hasResourceBeenVisited bucket) str
+          if null str'
+          	 then return False
+          	 else do
+                mapM_ (setResourceVisited bucket) str'
+                setEvalState $ Strings str'
+                evalWebRexp' isTail sub
 
-evalWebRexp _ (Ref ref) = do
+      Nodes ns -> do
+          ns' <- filterM (liftM not . hasResourceBeenVisited bucket 
+                               . rezPathToString
+                               . rootRef) ns
+          if null ns'
+          	 then return False
+          	 else do
+                mapM_ (\n -> let nname = rezPathToString $ rootRef n
+                             in do debugLog $ ">>> Marking " ++ nname
+                                   setResourceVisited bucket nname) ns'
+                setEvalState $ Nodes ns'
+                evalWebRexp' isTail sub
+      
+
+evalWebRexp' _ (Ref ref) = do
     debugLog $ "> 'ref' : " ++ show ref
     st <- getEvalState
     case st of
@@ -180,26 +212,26 @@ evalWebRexp _ (Ref ref) = do
                  setEvalState None
                  return False
 
-evalWebRexp _ (Range subs) = do
+evalWebRexp' _ (Range subs) = do
     debugLog "> '[...]'"
     _ <- filterNodes subs
     return True
 
-evalWebRexp _ DiggLink = do
+evalWebRexp' _ DiggLink = do
     debugLog "> '>'"
     getEvalState >>= diggLinks
 
-evalWebRexp _ NextSibling = do
+evalWebRexp' _ NextSibling = do
   debugLog "> '|'"
   mapCurrentNodes $ siblingAccessor 1
   hasNodeLeft
 
-evalWebRexp _ PreviousSibling = do
+evalWebRexp' _ PreviousSibling = do
   debugLog "> '^'"
   mapCurrentNodes $ siblingAccessor (-1)
   hasNodeLeft
 
-evalWebRexp _ Parent = do
+evalWebRexp' _ Parent = do
   debugLog "> '<'"
   mapCurrentNodes parentExtractor
   hasNodeLeft

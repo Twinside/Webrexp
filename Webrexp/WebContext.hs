@@ -33,6 +33,11 @@ module Webrexp.WebContext
     , popCurrentState 
     , getEvalState 
     , setEvalState 
+
+    -- ** Unicity manipulation function
+    , setUniqueBucketCount 
+    , hasResourceBeenVisited
+    , setResourceVisited
     )
     where
 
@@ -43,6 +48,8 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Data.Functor.Identity
 import Data.Maybe
+import Data.Array
+import qualified Data.Set as Set
 
 import Webrexp.ResourcePath
 import Webrexp.GraphWalker
@@ -65,7 +72,6 @@ data NodeContext node = NodeContext
 -- | This type represent the temporary results
 -- of the evaluation of regexp.
 data EvalState node =
-
       Nodes   [NodeContext node]
     | Strings [String]
     | None
@@ -79,6 +85,7 @@ data Context node = Context
     , httpDelay :: Int
     , httpUserAgent :: String
     , defaultOutput :: Handle
+    , uniqueBucket :: Array Int (Set.Set String) 
     }
 
 --------------------------------------------------
@@ -127,6 +134,7 @@ emptyContext = Context
     , httpDelay = 1500
     , httpUserAgent = ""
     , defaultOutput = stdout
+    , uniqueBucket = array (0,0) []
     }
 
 --------------------------------------------------
@@ -217,3 +225,20 @@ prepareLogger = WebContextT $ \c ->
       Normal -> return ((normalLog, errLog, silenceLog), c)
       Verbose -> return ((normalLog, errLog, normalLog), c)
 
+--------------------------------------------------
+----            Unique bucket
+--------------------------------------------------
+setUniqueBucketCount :: (Monad m) => Int -> WebContextT node m ()
+setUniqueBucketCount count = WebContextT $ \c ->
+    return ((), c{ uniqueBucket = listArray (0, count - 1) $ repeat Set.empty})
+
+hasResourceBeenVisited :: (Monad m) => Int -> String -> WebContextT node m Bool
+hasResourceBeenVisited bucketId str = WebContextT $ \c ->
+    return (str `Set.member` (uniqueBucket c ! bucketId), c)
+
+setResourceVisited :: (Monad m) => Int -> String -> WebContextT node m ()
+setResourceVisited bucketId str = WebContextT $ \c ->
+    let buckets = uniqueBucket c
+        newSet = Set.insert str $ buckets ! bucketId
+    in return ((), c{ uniqueBucket = buckets // [(bucketId, newSet)]  })
+      
