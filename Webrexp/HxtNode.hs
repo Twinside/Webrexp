@@ -20,7 +20,7 @@ instance GraphWalker HxtNode where
     accessGraph = loadHtml
     attribOf = findAttribute 
     childrenOf = findChildren
-    valueOf = getValue
+    valueOf = getValue . head . childrenOf
     nameOf = getName
 
 findAttribute :: String -> HxtNode -> Maybe String
