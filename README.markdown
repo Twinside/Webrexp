@@ -6,7 +6,7 @@ between each others, using a syntax similar to regexp.
 
 Using
 -----
-For tutorial and examples, please see the project's (wiki)[https://github.com/Twinside/Webrexp/wiki/Webrexp].
+For tutorial and examples, please see the project's [wiki](https://github.com/Twinside/Webrexp/wiki/Webrexp).
 
 Building
 --------
