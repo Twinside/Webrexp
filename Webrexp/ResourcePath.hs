@@ -30,7 +30,7 @@ toRezPath s = case (parseURI s, isValid s) of
 -- | Resource path combiner, similar to </> in use,
 -- but also handle URI.
 (<//>) :: ResourcePath -> ResourcePath -> ResourcePath
-(<//>) (Local a) (Local b) = Local $ a </> b
+(<//>) (Local a) (Local b) = Local $ (dropFileName a) </> b
 (<//>) (Remote a) (Remote b) =
     case b `relativeTo` a of
          -- TODO : find another way for this
@@ -42,7 +42,7 @@ toRezPath s = case (parseURI s, isValid s) of
     | isRelativeReference b = case parseRelativeReference b of
         Just r -> Remote . fromJust $ r `relativeTo` a
         Nothing -> error "Not possible, checked before"
-
+(<//>) (Local _) b@(Remote _) = b
 (<//>) _ _ = error "Mixing local/remote path"
 
 dumpResourcePath :: (Monad m, MonadIO m)

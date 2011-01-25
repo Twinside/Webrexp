@@ -67,8 +67,9 @@ findNamed name node = thisNodeValid ++ findSubNamed (node, [])
 -- | Return the first found node if any.
 findFirstNamed :: (GraphWalker a)
                => String -> [a] -> Maybe (a, [(a,Int)])
-findFirstNamed name lst = if null results
-                             then Nothing
-                             else Just $ head results
+findFirstNamed name lst = case results of
+                             [] -> Nothing
+                             (x:_) -> Just x
+
     where results = concatMap (findNamed name) lst 
 

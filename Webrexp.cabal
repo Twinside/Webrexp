@@ -8,8 +8,8 @@ Author: Vincent Berthoux
 Maintainer: Vincent Berthoux
 
 Executable webrexp
-    Main-Is: webrexpMain.hs
-    Ghc-Options: -Wall
+  Main-Is: webrexpMain.hs
+  Ghc-Options: -Wall -prof -auto-all
   Build-Depends: base >= 2.0, mtl,
                  HTTP >= 4000.1.1 && < 4000.2,
                  hxt >= 9.0.1 && < 9.1,
@@ -18,11 +18,11 @@ Executable webrexp
                  network >= 2.2.1.7 && < 2.3,
                  directory >= 1.0,
                  bytestring >= 0.9.1.7 && < 1.0,
-                 filepath,
-                 Webrexp
+                 filepath
+                 -- Webrexp
 
 Library
-  Ghc-Options: -Wall
+  Ghc-Options: -Wall -prof
   Exposed-Modules: Webrexp,
                    Webrexp.Parser,
                    Webrexp.Eval,

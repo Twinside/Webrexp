@@ -20,8 +20,15 @@ instance GraphWalker HxtNode where
     accessGraph = loadHtml
     attribOf = findAttribute 
     childrenOf = findChildren
-    valueOf = getValue . head . childrenOf
+    valueOf = valueOfNode
     nameOf = getName
+
+valueOfNode :: HxtNode -> String
+valueOfNode (NTree (XText txt) _) = txt
+valueOfNode a =
+    case childrenOf a of
+        (NTree (XText txt) _:_) -> txt
+        _ -> ""
 
 findAttribute :: String -> HxtNode -> Maybe String
 findAttribute attrName (NTree (XTag _ attrList) _) =
@@ -39,10 +46,6 @@ findChildren _ = []
 getName :: HxtNode -> Maybe String
 getName (NTree (XTag name _) _) = Just $ localPart name
 getName _ = Nothing
-
-getValue :: HxtNode -> String
-getValue (NTree (XText txt) _) = txt
-getValue _ = ""
 
 parseToHTMLNode :: String -> HxtNode
 parseToHTMLNode txt = case findFirstNamed "html" nodes of

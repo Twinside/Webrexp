@@ -3,4 +3,5 @@
 dist
 *.o
 *.hi
+*.exe
 tags

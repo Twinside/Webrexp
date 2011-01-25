@@ -13,7 +13,6 @@ module Webrexp (
                ) where
 
 import Control.Monad
-import Control.Monad.IO.Class
 import Text.Parsec
 import System.IO
 
@@ -78,8 +77,7 @@ evalWebRexp str =
     Right wexpr ->
         let crawled :: WebCrawler HxtNode Bool = 
                 E.evalWebRexp True wexpr
-        in do putStrLn $ "Parsed: " ++ show wexpr
-              evalWithEmptyContext crawled
+        in evalWithEmptyContext crawled
 
 evalWebRexpWithConf :: Conf -> IO Bool
 evalWebRexpWithConf conf =
@@ -98,8 +96,7 @@ evalWebRexpWithConf conf =
               when (verbose conf) (setLogLevel Verbose)
               E.evalWebRexp True wexpr
 
-        in do liftIO . putStrLn $ "Parsed: " ++ show wexpr
-              rez <- evalWithEmptyContext crawled
+        in do rez <- evalWithEmptyContext crawled
               if output conf /= stdout
                 then hClose $ output conf
                 else return ()
