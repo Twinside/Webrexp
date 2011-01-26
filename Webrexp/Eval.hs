@@ -112,7 +112,7 @@ evalWebRexp rexp = do
     debugLog $ "Parsed as: " ++ show neorexp
     evalWebRexp' True neorexp
     where (count, neorexp) = foldWebRexp uniqueCounter 0 rexp
-          uniqueCounter acc (Unique _ sub) = (acc + 1, Unique acc sub)
+          uniqueCounter acc (Unique _) = (acc + 1, Unique acc)
           uniqueCounter acc e = (acc, e)
 
 -- | Evaluate an expression, the boolean is here to propagate
@@ -165,7 +165,7 @@ evalWebRexp' _ (Action action) = do
         setEvalState $ Nodes rez
         hasNodeLeft
 
-evalWebRexp' isTail (Unique bucket sub) = do
+evalWebRexp' _ (Unique bucket) = do
     debugLog $ "> '!' (" ++ show bucket ++ ")"
     st <- getEvalState
     case st of
@@ -177,7 +177,7 @@ evalWebRexp' isTail (Unique bucket sub) = do
           	 else do
                 mapM_ (setResourceVisited bucket) str'
                 setEvalState $ Strings str'
-                evalWebRexp' isTail sub
+                hasNodeLeft
 
       Nodes ns -> do
           ns' <- filterM (liftM not . hasResourceBeenVisited bucket 
@@ -190,7 +190,7 @@ evalWebRexp' isTail (Unique bucket sub) = do
                              in do debugLog $ ">>> Marking " ++ nname
                                    setResourceVisited bucket nname) ns'
                 setEvalState $ Nodes ns'
-                evalWebRexp' isTail sub
+                hasNodeLeft
       
 
 evalWebRexp' _ (Ref ref) = do

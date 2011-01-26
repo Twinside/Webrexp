@@ -116,11 +116,12 @@ data WebRexp =
     -- | ... +
     | Plus WebRexp
 
-    -- | ... !
+    -- | !
     -- Possess an unique index to differentiate all the differents
     -- uniques. Negative value are considered invalid, all positive or
     -- null one are accepted.
-    | Unique Int WebRexp
+    | Unique Int
+
     -- | "..."
     | Str String
     -- { ... }
@@ -156,8 +157,6 @@ foldWebRexp f acc (List subs) = f acc' $ List subs'
 foldWebRexp f acc (Star sub) = f acc' $ Star sub'
     where (acc', sub') = foldWebRexp f acc sub
 foldWebRexp f acc (Plus sub) = f acc' $ Plus sub'
-    where (acc', sub') = foldWebRexp f acc sub
-foldWebRexp f acc (Unique i sub) = f acc' $ Unique i sub'
     where (acc', sub') = foldWebRexp f acc sub
 foldWebRexp f acc e = f acc e
 

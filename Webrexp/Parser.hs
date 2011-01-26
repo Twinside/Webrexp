@@ -59,8 +59,7 @@ lexer  = P.makeTokenParser
 -----------------------------------------------------------
 webrexpCombinator :: OperatorTable String st Identity WebRexp
 webrexpCombinator =
-    [ [ postfix "!" (Unique $ negate 1)
-      , postfix "*" Star
+    [ [ postfix "*" Star
       , postfix "+" Plus ] ]
 
 operatorDefs :: OperatorTable String st Identity ActionExpr
@@ -100,6 +99,7 @@ webrexpOp =  spaceSurrounded ops
              <|> (PreviousSibling <$ char '^')
              <|> (NextSibling <$ char '|')
              <|> (Parent <$ char '<')
+             <|> (Unique (-1) <$ char '!')
              <?> "webrexpOp"
 
 webident :: Parsed st String
