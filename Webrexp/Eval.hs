@@ -24,7 +24,8 @@ evalList isTail (x:xs) = do
     valid <- evalWebRexp' False x
     if valid
        then evalList isTail xs
-       else return False
+       else do debugLog "> FALSE [ .. ]"
+       	       return False
 
 -- | Evaluate a list of webrexp with a rollback system (reverting
 -- to the initial state for every list element).
@@ -155,22 +156,20 @@ evalWebRexp' _ (Str str) = do
 evalWebRexp' _ (Action action) = do
     debugLog "> '{...}'"
     st <- getEvalState
+
+    let applyAction elemator lst = do
+        rez <- mapM (evalAction action . elemator) lst
+        mapM_ (dumpActionVal . fst) rez
+        let justValids  = map snd $ filter (isActionResultValid . fst) rez
+        if areElemSames justValids
+           then do debugLog $ ">>> left " ++ show (length justValids)
+                   setEvalState $ nodify justValids
+                   hasNodeLeft
+           else setEvalState None >> return False
     case st of
       None -> return False
-
-      Strings strs -> do
-        rez <- filterM (\e -> do rez <- evalAction action $ ElemString e
-                                 return $ isActionResultValid rez) strs
-        debugLog $ ">>> left " ++ show (length rez)
-        setEvalState $ Strings rez
-        hasNodeLeft
-
-      Nodes nds -> do
-        rez <- filterM (\e -> do rez <- evalAction action $ ElemNode e
-                                 return $ isActionResultValid rez) nds
-        debugLog $ ">>> left " ++ show (length rez)
-        setEvalState $ Nodes rez
-        hasNodeLeft
+      Strings strs -> applyAction ElemString strs
+      Nodes nds -> applyAction ElemNode nds
 
 evalWebRexp' _ (Unique bucket) = do
     debugLog $ "> '!' (" ++ show bucket ++ ")"
@@ -319,13 +318,21 @@ data ActionValue =
     | ATypeError
     deriving (Show)
 
-binArith :: (Int -> Int -> Int) -> ActionValue -> ActionValue -> ActionValue
-binArith f (AInt a) (AInt b) = AInt $ f a b
-binArith _ _ _ = ATypeError
+binArith :: (GraphWalker node)
+         => (ActionValue -> ActionValue -> ActionValue) -> Elem node -> ActionExpr -> ActionExpr
+         -> WebCrawler node (ActionValue, Elem node)
+binArith f e sub1 sub2 = do
+    (v1,e') <- evalAction sub1 e
+    (v2, e'') <- evalAction sub2 e'
+    return (v1 `f` v2, e'')
 
-valComp :: (Int -> Int -> Bool) -> ActionValue -> ActionValue -> ActionValue
-valComp f (AInt a) (AInt b) = ABool $ f a b
-valComp _ _ _ = ATypeError
+intOnly :: (Int -> Int -> Int) -> ActionValue -> ActionValue -> ActionValue
+intOnly f (AInt a) (AInt b) = AInt $ f a b
+intOnly _ _ _ = ATypeError
+
+intComp :: (Int -> Int -> Bool) -> ActionValue -> ActionValue -> ActionValue
+intComp f (AInt a) (AInt b) = ABool $ f a b
+intComp _ _ _ = ATypeError
 
 binComp :: ActionValue -> ActionValue -> ActionValue
 binComp (AInt a) (AInt b) = ABool $ a == b
@@ -349,73 +356,84 @@ isActionResultValid _ = True
 
 data Elem node = ElemNode (NodeContext node)
                | ElemString String
+               | NoElem
+areElemSames :: [Elem node] -> Bool
+areElemSames [] = True
+areElemSames (x:xs) = all (same x) xs
+    where same (ElemString _) (ElemString _) = True
+          same (ElemNode _) (ElemNode _) = True
+          same _ _ = False
 
-dumpContent :: (GraphWalker node) => Elem node -> WebCrawler node ActionValue
-dumpContent (ElemNode ns) =
+nodify :: [Elem node] -> EvalState node
+nodify [] = None
+nodify (NoElem:xs) = nodify xs
+nodify (ElemNode n:xs) = Nodes $ n : (catMaybes $ map isElem xs)
+    where isElem (ElemNode e) = Just e
+          isElem _ = Nothing
+nodify (ElemString s:xs) = Strings $ s : (catMaybes $ map isStr xs)
+    where isStr (ElemString  e) = Just e
+          isStr _ = Nothing
+
+dumpActionVal :: ActionValue -> WebCrawler node ()
+dumpActionVal (AString s) = textOutput s
+dumpActionVal _ = return ()
+
+dumpContent :: (GraphWalker node) => Elem node -> WebCrawler node (ActionValue, Elem node)
+dumpContent NoElem = return (ABool False, NoElem)
+dumpContent e@(ElemString str) = return (AString str, e)
+dumpContent e@(ElemNode ns) =
   case attribOf "src" (this ns) >>= toRezPath of
-    Nothing -> do
-        textOutput $ valueOf (this ns)
-        return (ABool True)
+    Nothing -> return (AString $ valueOf (this ns), e)
     Just r -> do
         dumpResourcePath (infoLog) $ (rootRef ns) <//> r
-        return (ABool True)
-
-dumpContent (ElemString str) =
-    textOutput str >> return (ABool True)
+        return (ABool True, e)
 
 -- | Evaluate embedded action in WebRexp
 evalAction :: (GraphWalker node)
-           => ActionExpr -> Elem node -> WebCrawler node ActionValue
-evalAction (ActionExprs actions) e = evaluator actions
-    where evaluator [] = return $ ABool True
-          evaluator [x] = evalAction x e
-          evaluator (x:xs) = do
-              rez <- evalAction x e
-              if isActionResultValid rez
-              	 then evaluator xs
-              	 else return rez
+           => ActionExpr -> Elem node -> WebCrawler node (ActionValue, Elem node)
+evalAction (ActionExprs actions) e = foldM eval (ABool True, e) actions
+    where eval v@(ABool False, _) _ = return v
+          eval (_, el) act = evalAction act el
 
-
-evalAction (CstI i) _ = return (AInt i)
-evalAction (CstS s) _ = return (AString s)
+evalAction (NodeReplace sub) e = do
+    (val, el) <- evalAction sub e
+    case val of
+         AInt i -> return (ABool True, ElemString $ show i)
+         ABool True -> return (ABool True, ElemString "1")
+         ABool False -> return (ABool True, ElemString "0")
+         AString s -> return (ABool True, ElemString s)
+         ATypeError -> return (val, el)
+         
+evalAction (CstI i) n = return (AInt i, n)
+evalAction (CstS s) n = return (AString s, n)
 evalAction OutputAction e =
     dumpContent e
 
-evalAction (ARef _) (ElemString _) = do
-    return ATypeError
+evalAction (ARef _) NoElem =
+    return (ATypeError, NoElem)
+evalAction (ARef _) (ElemString _) =
+    return (ATypeError, NoElem)
 
-evalAction (ARef r) (ElemNode n) = do
+evalAction (ARef r) e@(ElemNode n) = do
     case attribOf r (this n) of
-      Nothing -> return (ABool False)
-      Just s -> return $ AString s
+      Nothing -> return (ABool False, e)
+      Just s -> return $ (AString s, e)
 
-evalAction (BinOp OpAdd a b) e =
-    binArith (+) <$> evalAction a e <*> evalAction b e
-evalAction (BinOp OpSub a b) e =
-    binArith (-) <$> evalAction a e <*> evalAction b e
-evalAction (BinOp OpMul a b) e =
-    binArith (*) <$> evalAction a e <*> evalAction b e
-evalAction (BinOp OpDiv a b) e =
-    binArith div <$> evalAction a e <*> evalAction b e
+evalAction (BinOp OpAdd a b) e = binArith (intOnly (+)) e a b
+evalAction (BinOp OpSub a b) e = binArith (intOnly (-)) e a b
+evalAction (BinOp OpMul a b) e = binArith (intOnly (*)) e a b
+evalAction (BinOp OpDiv a b) e = binArith (intOnly div) e a b
 
-evalAction (BinOp OpLt a b) e =
-    valComp (<) <$> evalAction a e <*> evalAction b e
-evalAction (BinOp OpLe a b) e =
-    valComp (<=) <$> evalAction a e <*> evalAction b e
-evalAction (BinOp OpGt a b) e =
-    valComp (>) <$> evalAction a e <*> evalAction b e
-evalAction (BinOp OpGe a b) e =
-    valComp (>=) <$> evalAction a e <*> evalAction b e
+evalAction (BinOp OpLt a b) e = binArith (intComp (<)) e a b
+evalAction (BinOp OpLe a b) e = binArith (intComp (<=)) e a b
+evalAction (BinOp OpGt a b) e = binArith (intComp (>)) e a b
+evalAction (BinOp OpGe a b) e = binArith (intComp (>=)) e a b
 
-evalAction (BinOp OpEq a b) e =
-    binComp <$> evalAction a e <*> evalAction b e
-evalAction (BinOp OpNe a b) e =
-    valNot <$> (binComp <$> evalAction a e <*> evalAction b e)
-        where valNot (ABool f) = ABool $ not f
-              valNot el = el
+evalAction (BinOp OpEq a b) e = binArith binComp e a b
+evalAction (BinOp OpNe a b) e = binArith (\a' b' -> valNot $ binComp a' b') e a b
+    where valNot (ABool f) = ABool $ not f
+          valNot el = el
 
-evalAction (BinOp OpAnd a b) e =
-    boolComp (&&) <$> evalAction a e <*> evalAction b e
-evalAction (BinOp OpOr  a b) e =
-    boolComp (||) <$> evalAction a e <*> evalAction b e
+evalAction (BinOp OpAnd a b) e = binArith (boolComp (&&)) e a b
+evalAction (BinOp OpOr  a b) e = binArith (boolComp (||)) e a b
 

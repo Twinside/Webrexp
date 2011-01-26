@@ -3,6 +3,7 @@ import Control.Monad
 import System.Console.GetOpt
 import System.Environment
 import System.IO
+import System.Exit
 
 import Webrexp
 
@@ -25,16 +26,20 @@ options =
             "Time to wait between HTTP request (ms)"
     ]
 
+hasInput :: Flag -> Bool
+hasInput (Input _) = True
+hasInput _ = False
+
 parseArgs :: [String] -> IO Conf
 parseArgs args =
     case getOpt Permute options args of
      (opt, [], _) -> do
             conf <- foldM configurator defaultConf opt
-            return $ conf { showHelp = True }
+            return $ conf { showHelp = not $ any hasInput opt }
      (opt, left:_, _) -> do
         conf <- foldM configurator defaultConf opt
         if expr conf == "" then return $ conf{expr = left}
-                           else return conf
+                          else return conf
      where configurator c Verbose = return $ c{ verbose = True }
            configurator c Quiet = return $ c{ quiet = True }
            configurator c Help = return $ c{ showHelp = True }
@@ -52,9 +57,11 @@ main = do
     args <- getArgs
     c <- parseArgs args
     if showHelp c
-       then putStrLn $ usageInfo "Webrexp" options
+       then do putStrLn $ usageInfo "Webrexp" options
+               exitWith ExitSuccess
+
        else do valid <- evalWebRexpWithConf c
                if valid
-                  then putStrLn "SUCCESS"
-                  else putStrLn "ERROR"
+                  then exitWith ExitSuccess
+                  else exitWith $ ExitFailure 1
 

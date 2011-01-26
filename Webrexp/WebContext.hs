@@ -33,6 +33,7 @@ module Webrexp.WebContext
     , popCurrentState 
     , getEvalState 
     , setEvalState 
+    , dumpCurrentState
 
     -- ** Unicity manipulation function
     , setUniqueBucketCount 
@@ -188,6 +189,7 @@ hasNodeLeft :: (Monad m) => WebContextT node m Bool
 hasNodeLeft = WebContextT $ \c ->
     case currentNodes c of
       Nodes n -> return (not $ null n, c)
+      Strings n -> return (not $ null n, c)
       _       -> return (False, c)
 
 -- | Allow the interpreter to change the evaluation state of
@@ -224,6 +226,13 @@ prepareLogger = WebContextT $ \c ->
       Quiet -> return ((silenceLog, errLog, silenceLog), c)
       Normal -> return ((normalLog, errLog, silenceLog), c)
       Verbose -> return ((normalLog, errLog, normalLog), c)
+
+dumpCurrentState :: WebContextT node IO ()
+dumpCurrentState = WebContextT $ \c -> do
+    case currentNodes c of
+      None -> putStrLn "None" >> return ((), c)
+      Nodes _ -> return ((), c)
+      Strings ss -> mapM_ putStrLn ss >> return ((), c)
 
 --------------------------------------------------
 ----            Unique bucket

@@ -99,6 +99,9 @@ data ActionExpr =
     -- | a string constant
     | CstS String
 
+    -- | '$'... operator
+    | NodeReplace ActionExpr
+
     -- | the '.' action
     | OutputAction
     deriving (Eq, Show)

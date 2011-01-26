@@ -49,7 +49,7 @@ lexer  = P.makeTokenParser
          (haskellStyle { P.reservedOpNames = [ "&", "|", "<", ">"
                                              , "*", "/", "+", "-"
                                              , "^", "=", "!", ":"
-                                             , "_"
+                                             , "_", "$", "#"
                                              ]
                        , P.identStart = letter
                        } )
@@ -60,7 +60,9 @@ lexer  = P.makeTokenParser
 webrexpCombinator :: OperatorTable String st Identity WebRexp
 webrexpCombinator =
     [ [ postfix "*" Star
-      , postfix "+" Plus ] ]
+      , postfix "+" Plus ]
+    , [ binary "|" Alternative AssocLeft ]
+    ]
 
 operatorDefs :: OperatorTable String st Identity ActionExpr
 operatorDefs = 
@@ -76,6 +78,7 @@ operatorDefs =
       ,binary ">=" (BinOp OpGe) AssocLeft]
     , [binary "&" (BinOp OpAnd) AssocLeft
       ,binary "|" (BinOp OpOr) AssocLeft]
+    , [prefix "$" NodeReplace]
     ]
 
 
@@ -131,9 +134,10 @@ actionTerm = (ARef <$> attribute)
           <?> "actionTerm"
 
 actionExpr :: Parsed st ActionExpr
-actionExpr =
-    buildExpressionParser operatorDefs
-                        (spaceSurrounded actionTerm)
+actionExpr = (char '$' >> whiteSpace >> NodeReplace <$> wholeExpr)
+          <|> wholeExpr
+          <?> "actionExpr"
+    where wholeExpr = buildExpressionParser operatorDefs (spaceSurrounded actionTerm)
 
 actionList :: Parsed st ActionExpr
 actionList = (aexpr <$>
@@ -181,8 +185,8 @@ spaceSurrounded p = do
 binary :: String -> (a -> a -> a) -> Assoc -> Operator String st Identity a
 binary name fun = Infix (do{ reservedOp name; return fun })
 
-{-prefix :: String -> (a -> a) -> Operator String st Identity a-}
-{-prefix  name fun = Prefix (do{ reservedOp name; return fun })-}
+prefix :: String -> (a -> a) -> Operator String st Identity a
+prefix  name fun = Prefix (do{ reservedOp name; return fun })
 
 postfix :: String -> (a -> a) -> Operator String st Identity a
 postfix name fun = Postfix (do{ reservedOp name; return fun })
