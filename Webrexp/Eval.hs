@@ -259,7 +259,8 @@ downLinks (Just path) = do
                     NodeContext { parents = []
          	                    , rootRef = u
          	                    , this = n }
-downLinks Nothing = return Nothing
+downLinks Nothing = 
+    debugLog "# NO URL!!" >> return Nothing
 
 diggLinks :: (GraphWalker node) => EvalState node -> WebCrawler node Bool
 diggLinks (Nodes subs) = do

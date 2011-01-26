@@ -1,0 +1,2 @@
+"http://drmcninja.com/" > div#comic-head a.prev > link {@rel="start"} > (div#comic img {.}; link {@rel="next"} >)*
+

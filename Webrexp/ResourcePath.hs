@@ -8,6 +8,7 @@ module Webrexp.ResourcePath
     , rezPathToString
     ) where
 
+import Control.Applicative
 import Control.Concurrent
 import Control.Monad.IO.Class
 import Data.Maybe
@@ -27,10 +28,11 @@ rezPathToString (Local p) = p
 rezPathToString (Remote uri) = show uri
 
 toRezPath :: String -> Maybe ResourcePath
-toRezPath s = case (parseURI s, isValid s) of
-        (Just u, _) -> Just $ Remote u
-        (Nothing, True) -> Just $ Local s
-        (Nothing, False) -> Nothing
+toRezPath s = case (parseURI s, isValid s, isRelativeReference s) of
+        (Just u, _, _) -> Just $ Remote u
+        (Nothing, True, _) -> Just $ Local s
+        (Nothing, False, True) -> Remote <$> parseRelativeReference s
+        (Nothing, False, False) -> Nothing
 
 -- | Resource path combiner, similar to </> in use,
 -- but also handle URI.

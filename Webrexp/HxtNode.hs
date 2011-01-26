@@ -30,12 +30,15 @@ valueOfNode a =
         (NTree (XText txt) _:_) -> txt
         _ -> ""
 
+extractText :: [HxtNode] -> String
+extractText = concat . map valueOfNode
+
 findAttribute :: String -> HxtNode -> Maybe String
 findAttribute attrName (NTree (XTag _ attrList) _) =
     attrFinder attrList
   where attrFinder [] = Nothing
-        attrFinder (NTree (XAttr name) [value]:_)
-            | localPart name == attrName = Just $ valueOf value
+        attrFinder (NTree (XAttr name) values:_)
+            | localPart name == attrName = Just $ extractText values
         attrFinder (_:xs) = attrFinder xs
 findAttribute _ _ = Nothing
 
