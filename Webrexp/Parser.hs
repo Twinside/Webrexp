@@ -69,7 +69,7 @@ operatorDefs =
     , [binary "+" (BinOp OpAdd) AssocLeft
       ,binary "-" (BinOp OpSub) AssocLeft]
     , [binary "=" (BinOp OpEq)  AssocRight
-      ,binary "/=" (BinOp OpNe) AssocLeft
+      ,binary "!=" (BinOp OpNe) AssocLeft
       ,binary "<" (BinOp OpLt)  AssocLeft
       ,binary ">"  (BinOp OpGt) AssocLeft
       ,binary "<=" (BinOp OpLe) AssocLeft
@@ -97,7 +97,7 @@ webrexpOp :: Parsed st WebRexp
 webrexpOp =  spaceSurrounded ops
     where ops =  (DiggLink <$ char '>')
              <|> (PreviousSibling <$ char '^')
-             <|> (NextSibling <$ char '|')
+             <|> (NextSibling <$ char '/')
              <|> (Parent <$ char '<')
              <|> (Unique (-1) <$ char '!')
              <?> "webrexpOp"

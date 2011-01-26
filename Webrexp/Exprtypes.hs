@@ -116,6 +116,9 @@ data WebRexp =
     -- | ... +
     | Plus WebRexp
 
+    -- | 
+    | Alternative WebRexp WebRexp
+
     -- | !
     -- Possess an unique index to differentiate all the differents
     -- uniques. Negative value are considered invalid, all positive or
@@ -136,7 +139,7 @@ data WebRexp =
     -- to follow hyper link
     | DiggLink
 
-    -- | '|' operator in the language, used
+    -- | '/' operator in the language, used
     -- to select the next sibling node.
     | NextSibling
 

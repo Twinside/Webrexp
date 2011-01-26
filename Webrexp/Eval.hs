@@ -140,6 +140,13 @@ evalWebRexp' isTail (Plus subs) = do
                     return True
             else return False
 
+evalWebRexp' isTail (Alternative a b) = do
+    debugLog "> '...|...'"
+    leftValid <- evalWebRexp' False a
+    if leftValid
+       then return True
+       else evalWebRexp' isTail b
+
 evalWebRexp' _ (Str str) = do
     debugLog "> '\"...\"'"
     setEvalState $ Strings [str]
@@ -222,7 +229,7 @@ evalWebRexp' _ DiggLink = do
     getEvalState >>= diggLinks
 
 evalWebRexp' _ NextSibling = do
-  debugLog "> '|'"
+  debugLog "> '/'"
   mapCurrentNodes $ siblingAccessor 1
   hasNodeLeft
 
