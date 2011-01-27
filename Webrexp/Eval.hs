@@ -265,12 +265,9 @@ downLinks Nothing =
 diggLinks :: (GraphWalker node) => EvalState node -> WebCrawler node Bool
 diggLinks (Nodes subs) = do
     neoNodes <- catMaybes <$>
-                    sequence [ downLinks $ (rootRef s <//>) <$> url
+                    sequence [ downLinks $ (rootRef s <//>) <$> indir
                                 | s <- subs
-                                , let href = attribOf "href" $ this s
-                                , href /= Nothing
-                                , let Just ref = href
-                                , let url = toRezPath ref ]
+                                , indir <- indirectLinks s ]
     case neoNodes of
       [] -> setEvalState None >> return False
       lst -> setEvalState (Nodes lst) >> return True
@@ -383,8 +380,8 @@ dumpContent :: (GraphWalker node) => Elem node -> WebCrawler node (ActionValue, 
 dumpContent NoElem = return (ABool False, NoElem)
 dumpContent e@(ElemString str) = return (AString str, e)
 dumpContent e@(ElemNode ns) =
-  case attribOf "src" (this ns) >>= toRezPath of
-    Nothing -> return (AString $ valueOf (this ns), e)
+  case indirectLinks (this ns) of
+    [] -> return (AString $ valueOf (this ns), e)
     Just r -> do
         dumpResourcePath (infoLog) $ (rootRef ns) <//> r
         return (ABool True, e)

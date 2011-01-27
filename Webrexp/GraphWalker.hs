@@ -37,6 +37,11 @@ class (Show a) => GraphWalker a where
     -- | Retrieve the value of the tag (textual)
     valueOf :: a -> String
 
+    -- | Retrieve all the indirectly linked content
+    -- of a node, can be used for element like an
+    -- HTML link or an linked image/obj
+    indirectLinks :: a -> [ResourcePath]
+
     -- | The idea behind link following.
     -- The graph engine may have another name for the
     -- resource, so an updated name can be given.
