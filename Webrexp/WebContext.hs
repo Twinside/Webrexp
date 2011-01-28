@@ -7,6 +7,7 @@ module Webrexp.WebContext
     , WebContext 
     , NodeContext (..)
     , EvalState (..)
+    , BinBlob (..)
     , Context
 
     -- * Crawling configuration
@@ -24,7 +25,6 @@ module Webrexp.WebContext
     
     -- * Implementation info
     -- ** Evaluation function
-    , mapCurrentNodes 
     , hasNodeLeft 
     , prepareLogger 
 
@@ -48,7 +48,6 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Data.Functor.Identity
-import Data.Maybe
 import Data.Array
 import qualified Data.Set as Set
 
@@ -69,18 +68,22 @@ data NodeContext node rezPath = NodeContext
     , rootRef :: rezPath
     }
 
+data BinBlob rezPath = BinBlob
+    { sourcePath :: rezPath
+    }
+
 -- | This type represent the temporary results
 -- of the evaluation of regexp.
 data EvalState node rezPath =
-      Nodes   [NodeContext node rezPath]
-    | Strings [String]
-    | None
+      Node (NodeContext node rezPath)
+    | Text String
+    | Blob (BinBlob rezPath)
 
 data LogLevel = Quiet | Normal | Verbose deriving (Eq)
 
 data Context node rezPath = Context
-    { currentNodes :: EvalState node rezPath
-    , contextStack :: [EvalState node rezPath]
+    { currentNodes :: [EvalState node rezPath]
+    , contextStack :: [[EvalState node rezPath]]
     , logLevel :: LogLevel
     , httpDelay :: Int
     , httpUserAgent :: String
@@ -129,7 +132,7 @@ instance (MonadIO m) => MonadIO (WebContextT node rezPath m) where
 emptyContext :: Context node rezPath
 emptyContext = Context
     { contextStack = []
-    , currentNodes = None
+    , currentNodes = []
     , logLevel = Normal
     , httpDelay = 1500
     , httpUserAgent = ""
@@ -185,34 +188,18 @@ evalWithEmptyContext val = do
     return finalVal
 
 hasNodeLeft :: (Monad m) => WebContextT node rezPath m Bool
-hasNodeLeft = WebContextT $ \c ->
-    case currentNodes c of
-      Nodes n -> return (not $ null n, c)
-      Strings n -> return (not $ null n, c)
-      _       -> return (False, c)
+hasNodeLeft = WebContextT $ \c -> return (null $ currentNodes c, c)
 
 -- | Allow the interpreter to change the evaluation state of
 -- monad.
 setEvalState :: (Monad m)
-             => EvalState node rezPath -> WebContextT node rezPath m ()
+             => [EvalState node rezPath] -> WebContextT node rezPath m ()
 setEvalState st = WebContextT $ \c ->
     return ((), c { currentNodes = st })
 
-getEvalState :: (Monad m) => WebContextT node rezPath m (EvalState node rezPath)
+getEvalState :: (Monad m) => WebContextT node rezPath m [EvalState node rezPath]
 getEvalState = WebContextT $ \c ->
     return (currentNodes c, c)
-
--- | Map operation performing it only if the evaluation
--- state is a list of nodes.
-mapCurrentNodes :: (Monad m, GraphWalker node r)
-                => (NodeContext node rezPath -> Maybe (NodeContext node rezPath))
-                -> WebContextT node rezPath m ()
-mapCurrentNodes f = WebContextT $ \c ->
-    case currentNodes c of
-      Nodes nodes ->
-         let newNodes = catMaybes $ map f nodes
-         in return ((), c{ currentNodes = Nodes newNodes })
-      _ -> return ((), c)
 
 -- | Return normal, error, verbose logger
 prepareLogger :: (Monad m)
@@ -226,12 +213,13 @@ prepareLogger = WebContextT $ \c ->
       Normal -> return ((normalLog, errLog, silenceLog), c)
       Verbose -> return ((normalLog, errLog, normalLog), c)
 
-dumpCurrentState :: WebContextT node rezPath IO ()
+dumpCurrentState :: (GraphWalker node rezPath)
+                 => WebContextT node rezPath IO ()
 dumpCurrentState = WebContextT $ \c -> do
-    case currentNodes c of
-      None -> putStrLn "None" >> return ((), c)
-      Nodes _ -> return ((), c)
-      Strings ss -> mapM_ putStrLn ss >> return ((), c)
+    mapM_ (\e -> case e of
+      Blob b -> putStrLn $ "Blob (" ++ (show $ sourcePath b) ++ ")"
+      Node n -> putStrLn $ show (this n)
+      Text s -> putStrLn s) (currentNodes c) >> return ((), c)
 
 --------------------------------------------------
 ----            Unique bucket
