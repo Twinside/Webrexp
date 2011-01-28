@@ -4,7 +4,6 @@ module Webrexp.HxtNode( HxtNode ) where
 
 import Control.Monad.IO.Class
 import Network.HTTP
-import Network.Browser
 
 import Data.Tree.NTree.TypeDefs
 import Text.XML.HXT.Parser.HtmlParsec
@@ -14,6 +13,9 @@ import System.Directory
 
 import Webrexp.ResourcePath
 import Webrexp.GraphWalker
+import Webrexp.Remote.MimeTypes
+
+import qualified Data.ByteString.Lazy.Char8 as B ( unpack )
 
 type HxtNode = NTree XNode
 
@@ -71,15 +73,16 @@ loadHtml (logger, _errLog, _verbose) (Local s) = do
        	       return . Result (Local s)
                       $ parseToHTMLNode file
 
-loadHtml (logger, errLog,  verbose) (Remote uri) = do
+loadHtml loggers@(logger, _,  verbose) (Remote uri) = do
   liftIO . logger $ "Downloading URL : '" ++ show uri ++ "'"
-  (u, rsp) <- liftIO . browse $ do
-        setAllowRedirects True
-        setErrHandler errLog
-        setOutHandler verbose
-        request $ defaultGETRequest uri
-
-  liftIO . verbose $ "Downloaded (" ++ show uri ++ ")"
-  return . Result (Remote u)
-         . parseToHTMLNode $ rspBody rsp
+  (u, rsp) <- downloadBinary loggers uri
+  liftIO . verbose $ "Downloaded (" ++ show u ++ ")"
+  let contentType = retrieveHeaders HdrContentType rsp
+  case contentType of
+    [] -> return AccessError
+    (hdr:_) -> if isParseable $ hdrValue hdr
+        then return . Result (Remote u)
+                    . parseToHTMLNode 
+                    . B.unpack $ rspBody rsp
+        else return . DataBlob (Remote u) $ rspBody rsp
 

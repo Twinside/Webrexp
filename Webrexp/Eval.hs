@@ -342,7 +342,8 @@ dumpContent e@(Just (Node ns)) =
   case indirectLinks (this ns) of
     [] -> return (AString $ valueOf (this ns), e)
     links -> do
-        mapM_ (\l -> dumpDataAtPath infoLog $
+        loggers <- prepareLogger
+        mapM_ (\l -> dumpDataAtPath loggers $
                             (rootRef ns) <//> l) links
         return (ABool True, e)
 dumpContent e@(Just (Text str)) = return (AString str, e)

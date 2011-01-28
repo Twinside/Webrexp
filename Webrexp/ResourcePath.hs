@@ -3,14 +3,15 @@
 module Webrexp.ResourcePath 
     ( ResourcePath (..)
     , rezPathToString
+    , downloadBinary
     ) where
 
 import Webrexp.GraphWalker
 import Control.Applicative
-import Control.Concurrent
 import Control.Monad.IO.Class
 import Data.Maybe
 import Network.HTTP
+import Network.Browser
 import Network.URI
 import System.Directory
 import System.FilePath
@@ -61,20 +62,24 @@ extractFileName (Remote a) = snd . splitFileName $ uriPath a
 extractFileName (Local c) = snd $ splitFileName c
 
 dumpResourcePath :: (Monad m, MonadIO m)
-                 => (String -> m ()) -> ResourcePath -> m ()
+                 => Loggers -> ResourcePath -> m ()
 dumpResourcePath _ src@(Local source) = do
     cwd <- liftIO $ getCurrentDirectory
     liftIO . copyFile source $ cwd </> extractFileName src
 
-dumpResourcePath logger p@(Remote a) =
-  downloadBinary logger a $ extractFileName p
+dumpResourcePath loggers@(logger,_,_) p@(Remote a) = do
+  let filename = extractFileName p
+  liftIO . logger $ "Downloading '" ++ show a ++ "' in '" ++ filename
+  (_, rsp) <- downloadBinary loggers a
+  liftIO . B.writeFile filename $ rspBody rsp
 
 downloadBinary :: (Monad m, MonadIO m)
-               => (String -> m ()) -> URI -> FilePath -> m ()
-downloadBinary logger url filename = do
-    logger $ "Downloading '" ++ show url ++ "' in '" ++ filename
-    liftIO $ threadDelay 1500
-    rsp <- liftIO . Network.HTTP.simpleHTTP $ mkRequest GET url
-    body <- liftIO $ getResponseBody rsp
-    liftIO $ B.writeFile filename body
+               => Loggers -> URI -> m (URI, Response B.ByteString)
+downloadBinary (_, errLog, verbose) url = do
+    liftIO . browse $ do
+        setAllowRedirects True
+        setErrHandler errLog
+        setOutHandler verbose
+        request $ defaultGETRequest_ url
+
 

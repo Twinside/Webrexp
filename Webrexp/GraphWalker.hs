@@ -40,7 +40,7 @@ class (Show a) => GraphPath a where
 
     -- | Whatever that means
     dumpDataAtPath :: (Monad m, MonadIO m)
-                   => (String -> m ()) -> a
+                   => Loggers -> a
                    -> m ()
 
     -- | Given a graphpath, transform it to
