@@ -78,6 +78,9 @@ loadHtml logger errLog verbose (Remote uri) = do
         request $ defaultGETRequest uri
 
   liftIO . verbose $ "Downloaded (" ++ show uri ++ ")"
+  liftIO . verbose $ 
+        "Downloaded (" ++ show uri ++ ") contentType:("
+            ++ (show $ retrieveHeaders HdrContentType rsp) ++ ")"
   return . Just
          . (,) (Remote u) 
          . parseToHTMLNode $ rspBody rsp

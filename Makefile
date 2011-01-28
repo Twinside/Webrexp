@@ -1,7 +1,7 @@
 
 build:
 	runhaskell Setup.hs build
-	cp dist/build/Webrexp/Webrexp.exe webrexp.exe
+	# cp dist/build/Webrexp/Webrexp.exe webrexp.exe
 
 conf:
 	runhaskell Setup.hs --user configure
