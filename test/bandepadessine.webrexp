@@ -1,2 +1,4 @@
-"http://www.labandepasdessinee.com/bpd/interlude-jai-du-mal" > ((!div.post_content p img {.})*; p.postmetadata a {. = "Episode suivant >"} >)*
+"http://www.labandepasdessinee.com/bpd/interlude-jai-du-mal" >
+    ( (!div.post_content p img {.})*;
+      p.postmetadata a {. = "Episode suivant >"} >)*
 

@@ -19,6 +19,7 @@ import System.IO
 import Webrexp.Exprtypes
 import Webrexp.Parser( webRexpParser )
 import Webrexp.HxtNode
+import Webrexp.ResourcePath
 import Webrexp.WebContext
 import qualified Webrexp.Eval as E
 
@@ -46,6 +47,8 @@ defaultConf = Conf
     , showHelp = False
     }
 
+type Crawled a = WebCrawler HxtNode ResourcePath a
+
 -- | Prepare a webrexp.
 -- This function is useful if the expression has
 -- to be applied many times.
@@ -60,8 +63,7 @@ parseWebRexp str =
 -- many times.
 evalParsedWebRexp :: WebRexp -> IO Bool
 evalParsedWebRexp wexpr = evalWithEmptyContext crawled
- where crawled :: WebCrawler HxtNode Bool = 
-            E.evalWebRexp wexpr
+ where crawled :: Crawled Bool = E.evalWebRexp wexpr
 
 -- | Simplest function to eval a webrexp.
 -- Return the evaluation status of the webrexp,
@@ -75,8 +77,7 @@ evalWebRexp str =
         return False
 
     Right wexpr ->
-        let crawled :: WebCrawler HxtNode Bool = 
-                E.evalWebRexp wexpr
+        let crawled :: Crawled Bool = E.evalWebRexp wexpr
         in evalWithEmptyContext crawled
 
 evalWebRexpWithConf :: Conf -> IO Bool
@@ -88,7 +89,7 @@ evalWebRexpWithConf conf =
         return False
 
     Right wexpr ->
-        let crawled :: WebCrawler HxtNode Bool = do
+        let crawled :: Crawled Bool = do
               setUserAgent $ userAgent conf
               setOutput $ output conf
               setHttpDelay $ hammeringDelay conf

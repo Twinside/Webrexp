@@ -2,17 +2,16 @@
 -- handling URI & local path.
 module Webrexp.ResourcePath 
     ( ResourcePath (..)
-    , toRezPath
-    , (<//>)
-    , dumpResourcePath
     , rezPathToString
+    , downloadBinary
     ) where
 
+import Webrexp.GraphWalker
 import Control.Applicative
-import Control.Concurrent
 import Control.Monad.IO.Class
 import Data.Maybe
 import Network.HTTP
+import Network.Browser
 import Network.URI
 import System.Directory
 import System.FilePath
@@ -22,6 +21,12 @@ data ResourcePath =
       Local FilePath
     | Remote URI
     deriving (Eq, Show)
+
+instance GraphPath ResourcePath where
+    (<//>) = combinePath
+    importPath = toRezPath
+    dumpDataAtPath = dumpResourcePath 
+    localizePath = extractFileName
 
 rezPathToString :: ResourcePath -> String
 rezPathToString (Local p) = p
@@ -36,39 +41,45 @@ toRezPath s = case (parseURI s, isValid s, isRelativeReference s) of
 
 -- | Resource path combiner, similar to </> in use,
 -- but also handle URI.
-(<//>) :: ResourcePath -> ResourcePath -> ResourcePath
-(<//>) (Local a) (Local b) = Local $ (dropFileName a) </> b
-(<//>) (Remote a) (Remote b) =
+combinePath :: ResourcePath -> ResourcePath -> ResourcePath
+combinePath (Local a) (Local b) = Local $ (dropFileName a) </> b
+combinePath (Remote a) (Remote b) =
     case b `relativeTo` a of
          -- TODO : find another way for this
          Nothing -> error "Can't merge resourcepath" 
                    -- Remote a
          Just c -> Remote c
 
-(<//>) (Remote a) (Local b)
+combinePath (Remote a) (Local b)
     | isRelativeReference b = case parseRelativeReference b of
         Just r -> Remote . fromJust $ r `relativeTo` a
         Nothing -> error "Not possible, checked before"
-(<//>) (Local _) b@(Remote _) = b
-(<//>) _ _ = error "Mixing local/remote path"
+combinePath (Local _) b@(Remote _) = b
+combinePath _ _ = error "Mixing local/remote path"
+
+extractFileName :: ResourcePath -> String
+extractFileName (Remote a) = snd . splitFileName $ uriPath a
+extractFileName (Local c) = snd $ splitFileName c
 
 dumpResourcePath :: (Monad m, MonadIO m)
-                 => (String -> m ()) -> ResourcePath -> m ()
-dumpResourcePath _ (Local source) = do
+                 => Loggers -> ResourcePath -> m ()
+dumpResourcePath _ src@(Local source) = do
     cwd <- liftIO $ getCurrentDirectory
-    liftIO . copyFile source $ cwd </> filename
-     where (_, filename) = splitFileName source
+    liftIO . copyFile source $ cwd </> extractFileName src
 
-dumpResourcePath logger (Remote a) =
-  downloadBinary logger a filename
-    where (_, filename) = splitFileName $ uriPath a
+dumpResourcePath loggers@(logger,_,_) p@(Remote a) = do
+  let filename = extractFileName p
+  liftIO . logger $ "Downloading '" ++ show a ++ "' in '" ++ filename
+  (_, rsp) <- downloadBinary loggers a
+  liftIO . B.writeFile filename $ rspBody rsp
 
 downloadBinary :: (Monad m, MonadIO m)
-               => (String -> m ()) -> URI -> FilePath -> m ()
-downloadBinary logger url filename = do
-    logger $ "Downloading '" ++ show url ++ "' in '" ++ filename
-    liftIO $ threadDelay 1500
-    rsp <- liftIO . Network.HTTP.simpleHTTP $ mkRequest GET url
-    body <- liftIO $ getResponseBody rsp
-    liftIO $ B.writeFile filename body
+               => Loggers -> URI -> m (URI, Response B.ByteString)
+downloadBinary (_, errLog, verbose) url = do
+    liftIO . browse $ do
+        setAllowRedirects True
+        setErrHandler errLog
+        setOutHandler verbose
+        request $ defaultGETRequest_ url
+
 

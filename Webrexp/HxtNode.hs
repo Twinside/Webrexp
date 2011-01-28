@@ -1,9 +1,9 @@
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Webrexp.HxtNode( HxtNode ) where
 
 import Control.Monad.IO.Class
 import Network.HTTP
-import Network.Browser
 
 import Data.Tree.NTree.TypeDefs
 import Text.XML.HXT.Parser.HtmlParsec
@@ -13,15 +13,19 @@ import System.Directory
 
 import Webrexp.ResourcePath
 import Webrexp.GraphWalker
+import Webrexp.Remote.MimeTypes
+
+import qualified Data.ByteString.Lazy.Char8 as B ( unpack )
 
 type HxtNode = NTree XNode
 
-instance GraphWalker HxtNode where
+instance GraphWalker HxtNode ResourcePath where
     accessGraph = loadHtml
     attribOf = findAttribute 
     childrenOf = findChildren
     valueOf = valueOfNode
     nameOf = getName
+    indirectLinks _ = error "Unimplemented : indirectLinks"
 
 valueOfNode :: HxtNode -> String
 valueOfNode (NTree (XText txt) _) = txt
@@ -58,30 +62,27 @@ parseToHTMLNode txt = case findFirstNamed "html" nodes of
 
 -- | Given a resource path, do the required loading
 loadHtml :: (MonadIO m)
-         => Logger -> Logger -> Logger -> ResourcePath
-         -> m (Maybe (ResourcePath, HxtNode))
-loadHtml logger _errLog _verbose (Local s) = do
+         => Loggers -> ResourcePath
+         -> m (AccessResult HxtNode ResourcePath)
+loadHtml (logger, _errLog, _verbose) (Local s) = do
     liftIO . logger $ "Opening file : '" ++ s ++ "'"
     realFile <- liftIO $ doesFileExist s
     if not realFile
-       then return Nothing
+       then return AccessError
        else do file <- liftIO $ readFile s
-       	       return . Just . (,) (Local s) 
-                             $ parseToHTMLNode file
+       	       return . Result (Local s)
+                      $ parseToHTMLNode file
 
-loadHtml logger errLog verbose (Remote uri) = do
+loadHtml loggers@(logger, _,  verbose) (Remote uri) = do
   liftIO . logger $ "Downloading URL : '" ++ show uri ++ "'"
-  (u, rsp) <- liftIO . browse $ do
-        setAllowRedirects True
-        setErrHandler errLog
-        setOutHandler verbose
-        request $ defaultGETRequest uri
-
-  liftIO . verbose $ "Downloaded (" ++ show uri ++ ")"
-  liftIO . verbose $ 
-        "Downloaded (" ++ show uri ++ ") contentType:("
-            ++ (show $ retrieveHeaders HdrContentType rsp) ++ ")"
-  return . Just
-         . (,) (Remote u) 
-         . parseToHTMLNode $ rspBody rsp
+  (u, rsp) <- downloadBinary loggers uri
+  liftIO . verbose $ "Downloaded (" ++ show u ++ ")"
+  let contentType = retrieveHeaders HdrContentType rsp
+  case contentType of
+    [] -> return AccessError
+    (hdr:_) -> if isParseable $ hdrValue hdr
+        then return . Result (Remote u)
+                    . parseToHTMLNode 
+                    . B.unpack $ rspBody rsp
+        else return . DataBlob (Remote u) $ rspBody rsp
 
