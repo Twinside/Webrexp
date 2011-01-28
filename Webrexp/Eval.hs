@@ -7,6 +7,7 @@ module Webrexp.Eval
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.IO.Class
 import Data.Maybe
 
 import Webrexp.GraphWalker
@@ -14,6 +15,7 @@ import Webrexp.Exprtypes
 import Webrexp.WebContext
 
 import Webrexp.Log
+import qualified Data.ByteString.Lazy as B
 
 evalList :: (GraphWalker node rezPath)
          => Bool -> [WebRexp] -> WebCrawler node rezPath Bool
@@ -229,11 +231,12 @@ downLinks :: (GraphWalker node rezPath)
           => rezPath
           -> WebCrawler node rezPath [EvalState node rezPath]
 downLinks path = do
-    (norm, err, verbo) <- prepareLogger
-    down <- accessGraph norm err verbo path
+    loggers <- prepareLogger
+    down <- accessGraph loggers path
     case down of
-         Nothing -> return []
-         Just (u,n) -> return [Node $
+         AccessError -> return []
+         DataBlob u b -> return [Blob $ BinBlob u b]
+         Result u n -> return [Node $
                     NodeContext { parents = []
          	                    , rootRef = u
          	                    , this = n }]
@@ -343,6 +346,10 @@ dumpContent e@(Just (Node ns)) =
                             (rootRef ns) <//> l) links
         return (ABool True, e)
 dumpContent e@(Just (Text str)) = return (AString str, e)
+dumpContent e@(Just (Blob b)) = do
+    liftIO $ B.writeFile (localizePath $ sourcePath b)
+                         (blobData b)
+    return (ABool True, e)
 
 -- | Evaluate embedded action in WebRexp
 evalAction :: (GraphWalker node rezPath)

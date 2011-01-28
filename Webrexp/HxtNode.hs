@@ -60,18 +60,18 @@ parseToHTMLNode txt = case findFirstNamed "html" nodes of
 
 -- | Given a resource path, do the required loading
 loadHtml :: (MonadIO m)
-         => Logger -> Logger -> Logger -> ResourcePath
-         -> m (Maybe (ResourcePath, HxtNode))
-loadHtml logger _errLog _verbose (Local s) = do
+         => Loggers -> ResourcePath
+         -> m (AccessResult HxtNode ResourcePath)
+loadHtml (logger, _errLog, _verbose) (Local s) = do
     liftIO . logger $ "Opening file : '" ++ s ++ "'"
     realFile <- liftIO $ doesFileExist s
     if not realFile
-       then return Nothing
+       then return AccessError
        else do file <- liftIO $ readFile s
-       	       return . Just . (,) (Local s) 
-                             $ parseToHTMLNode file
+       	       return . Result (Local s)
+                      $ parseToHTMLNode file
 
-loadHtml logger errLog verbose (Remote uri) = do
+loadHtml (logger, errLog,  verbose) (Remote uri) = do
   liftIO . logger $ "Downloading URL : '" ++ show uri ++ "'"
   (u, rsp) <- liftIO . browse $ do
         setAllowRedirects True
@@ -80,7 +80,6 @@ loadHtml logger errLog verbose (Remote uri) = do
         request $ defaultGETRequest uri
 
   liftIO . verbose $ "Downloaded (" ++ show uri ++ ")"
-  return . Just
-         . (,) (Remote u) 
+  return . Result (Remote u)
          . parseToHTMLNode $ rspBody rsp
 

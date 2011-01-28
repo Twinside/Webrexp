@@ -25,6 +25,7 @@ instance GraphPath ResourcePath where
     (<//>) = combinePath
     importPath = toRezPath
     dumpDataAtPath = dumpResourcePath 
+    localizePath = extractFileName
 
 rezPathToString :: ResourcePath -> String
 rezPathToString (Local p) = p
@@ -55,16 +56,18 @@ combinePath (Remote a) (Local b)
 combinePath (Local _) b@(Remote _) = b
 combinePath _ _ = error "Mixing local/remote path"
 
+extractFileName :: ResourcePath -> String
+extractFileName (Remote a) = snd . splitFileName $ uriPath a
+extractFileName (Local c) = snd $ splitFileName c
+
 dumpResourcePath :: (Monad m, MonadIO m)
                  => (String -> m ()) -> ResourcePath -> m ()
-dumpResourcePath _ (Local source) = do
+dumpResourcePath _ src@(Local source) = do
     cwd <- liftIO $ getCurrentDirectory
-    liftIO . copyFile source $ cwd </> filename
-     where (_, filename) = splitFileName source
+    liftIO . copyFile source $ cwd </> extractFileName src
 
-dumpResourcePath logger (Remote a) =
-  downloadBinary logger a filename
-    where (_, filename) = splitFileName $ uriPath a
+dumpResourcePath logger p@(Remote a) =
+  downloadBinary logger a $ extractFileName p
 
 downloadBinary :: (Monad m, MonadIO m)
                => (String -> m ()) -> URI -> FilePath -> m ()

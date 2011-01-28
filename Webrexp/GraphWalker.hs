@@ -3,13 +3,16 @@
 module Webrexp.GraphWalker
     ( GraphWalker(..)
     , GraphPath(..)
+    , AccessResult(..)
     , Logger
+    , Loggers
     , NodePath
     , findNamed
     , findFirstNamed 
     ) where
 
 import Control.Monad.IO.Class
+import qualified Data.ByteString.Lazy as B
 
 -- | Represent the path used to find the node
 -- from the starting point of the graph.
@@ -18,6 +21,9 @@ type NodePath a = [(a,Int)]
 -- | Type used to propagate different logging
 -- level across the software.
 type Logger = String -> IO ()
+
+-- | Normal/Err/verbose loggers.
+type Loggers = (Logger, Logger, Logger)
 
 -- | Represent indirect links or links which
 -- necessitate the use of the IO monad to walk
@@ -32,10 +38,20 @@ class (Show a) => GraphPath a where
     -- well specified).
     importPath :: String -> Maybe a
 
+    -- | Whatever that means
     dumpDataAtPath :: (Monad m, MonadIO m)
                    => (String -> m ()) -> a
                    -> m ()
 
+    -- | Given a graphpath, transform it to
+    -- a filepath which can be used to store
+    -- a node.
+    localizePath :: a -> FilePath
+
+data AccessResult a path =
+      Result path a
+    | DataBlob path B.ByteString
+    | AccessError
 
 -- | The aim of this typeclass is to permit
 -- the use of different html/xml parser if
@@ -71,8 +87,7 @@ class (Show a, GraphPath rezPath)
     -- The given function is there to log information,
     -- the second is to log errors
     accessGraph :: (MonadIO m)
-                => Logger -> Logger -> Logger -> rezPath
-                -> m (Maybe (rezPath, a))
+                => Loggers -> rezPath -> m (AccessResult a rezPath)
 
 -- | Given a tag and a name, retrieve
 -- the first matching tags in the hierarchy.

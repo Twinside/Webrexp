@@ -51,6 +51,7 @@ import Data.Functor.Identity
 import Data.Array
 import qualified Data.Set as Set
 
+import qualified Data.ByteString.Lazy as B
 import Webrexp.GraphWalker
 
 -- | Typical use of the WebContextT monad transformer
@@ -70,6 +71,7 @@ data NodeContext node rezPath = NodeContext
 
 data BinBlob rezPath = BinBlob
     { sourcePath :: rezPath
+    , blobData :: B.ByteString
     }
 
 -- | This type represent the temporary results
