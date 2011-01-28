@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Webrexp.HxtNode( HxtNode ) where
 
 import Control.Monad.IO.Class
@@ -16,12 +17,13 @@ import Webrexp.GraphWalker
 
 type HxtNode = NTree XNode
 
-instance GraphWalker HxtNode where
+instance GraphWalker HxtNode ResourcePath where
     accessGraph = loadHtml
     attribOf = findAttribute 
     childrenOf = findChildren
     valueOf = valueOfNode
     nameOf = getName
+    indirectLinks _ = error "Unimplemented : indirectLinks"
 
 valueOfNode :: HxtNode -> String
 valueOfNode (NTree (XText txt) _) = txt

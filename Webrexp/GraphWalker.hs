@@ -1,5 +1,8 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
 module Webrexp.GraphWalker
     ( GraphWalker(..)
+    , GraphPath(..)
     , Logger
     , NodePath
     , findNamed
@@ -7,13 +10,32 @@ module Webrexp.GraphWalker
     ) where
 
 import Control.Monad.IO.Class
-import Webrexp.ResourcePath
 
 -- | Represent the path used to find the node
 -- from the starting point of the graph.
 type NodePath a = [(a,Int)]
 
+-- | Type used to propagate different logging
+-- level across the software.
 type Logger = String -> IO ()
+
+-- | Represent indirect links or links which
+-- necessitate the use of the IO monad to walk
+-- around the graph.
+class (Show a) => GraphPath a where
+    -- | Combine two path togethers, you can think
+    -- of the </> operator for an equivalence.
+    (<//>) :: a -> a -> a
+
+    -- | conversion to be used to import path
+    -- from attributes/document (not really
+    -- well specified).
+    importPath :: String -> Maybe a
+
+    dumpDataAtPath :: (Monad m, MonadIO m)
+                   => (String -> m ()) -> a
+                   -> m ()
+
 
 -- | The aim of this typeclass is to permit
 -- the use of different html/xml parser if
@@ -21,7 +43,8 @@ type Logger = String -> IO ()
 -- the logic should use this interface.
 --
 -- Minimal implementation : accessGraph, attribOf, childrenOf, valueOf
-class (Show a) => GraphWalker a where
+class (Show a, GraphPath rezPath)
+        => GraphWalker a rezPath | a -> rezPath where
     -- | Get back an attribute of the node
     -- if it exists
     attribOf :: String -> a -> Maybe String
@@ -40,7 +63,7 @@ class (Show a) => GraphWalker a where
     -- | Retrieve all the indirectly linked content
     -- of a node, can be used for element like an
     -- HTML link or an linked image/obj
-    indirectLinks :: a -> [ResourcePath]
+    indirectLinks :: a -> [rezPath]
 
     -- | The idea behind link following.
     -- The graph engine may have another name for the
@@ -48,8 +71,8 @@ class (Show a) => GraphWalker a where
     -- The given function is there to log information,
     -- the second is to log errors
     accessGraph :: (MonadIO m)
-                => Logger -> Logger -> Logger -> ResourcePath 
-                -> m (Maybe (ResourcePath, a))
+                => Logger -> Logger -> Logger -> rezPath
+                -> m (Maybe (rezPath, a))
 
 -- | Given a tag and a name, retrieve
 -- the first matching tags in the hierarchy.
@@ -59,7 +82,7 @@ class (Show a) => GraphWalker a where
 -- the returned list must contain : the node itself if
 -- it match the name, and all the children containing the
 -- good name.
-findNamed :: (GraphWalker a)
+findNamed :: (GraphWalker a r)
           => String -> a -> [(a, [(a, Int)])]
 findNamed name node = thisNodeValid ++ findSubNamed (node, [])
     where thisNodeValid = if nameOf node == Just name
@@ -70,7 +93,7 @@ findNamed name node = thisNodeValid ++ findSubNamed (node, [])
                                 (child, idx)<- zip (childrenOf a) [0..]]
 
 -- | Return the first found node if any.
-findFirstNamed :: (GraphWalker a)
+findFirstNamed :: (GraphWalker a r)
                => String -> [a] -> Maybe (a, [(a,Int)])
 findFirstNamed name lst = case results of
                              [] -> Nothing

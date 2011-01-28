@@ -52,36 +52,35 @@ import Data.Maybe
 import Data.Array
 import qualified Data.Set as Set
 
-import Webrexp.ResourcePath
 import Webrexp.GraphWalker
 
 -- | Typical use of the WebContextT monad transformer
 -- allowing to download information
-type WebCrawler node a = WebContextT node IO a
+type WebCrawler node rezPath a = WebContextT node rezPath IO a
 
 -- | WebContext is 'WebContextT' as a simple Monad
-type WebContext node a = WebContextT node Identity a
+type WebContext node rezPath a = WebContextT node rezPath Identity a
 
 -- | Represent a graph node and the path
 -- used to go up to it.
-data NodeContext node = NodeContext
+data NodeContext node rezPath = NodeContext
     { parents :: [(node, Int)]
     , this :: node 
-    , rootRef :: ResourcePath
+    , rootRef :: rezPath
     }
 
 -- | This type represent the temporary results
 -- of the evaluation of regexp.
-data EvalState node =
-      Nodes   [NodeContext node]
+data EvalState node rezPath =
+      Nodes   [NodeContext node rezPath]
     | Strings [String]
     | None
 
 data LogLevel = Quiet | Normal | Verbose deriving (Eq)
 
-data Context node = Context
-    { currentNodes :: EvalState node
-    , contextStack :: [EvalState node]
+data Context node rezPath = Context
+    { currentNodes :: EvalState node rezPath
+    , contextStack :: [EvalState node rezPath]
     , logLevel :: LogLevel
     , httpDelay :: Int
     , httpUserAgent :: String
@@ -92,20 +91,20 @@ data Context node = Context
 --------------------------------------------------
 ----            Monad definitions
 --------------------------------------------------
-newtype (Monad m) => WebContextT node m a =
-    WebContextT { runWebContextT :: Context node
-                                 -> m (a, Context node) }
+newtype (Monad m) => WebContextT node rezPath m a =
+    WebContextT { runWebContextT :: Context node rezPath
+                                 -> m (a, Context node rezPath ) }
 
-instance (Functor m, Monad m) => Functor (WebContextT node m) where
+instance (Functor m, Monad m) => Functor (WebContextT node rezPath m) where
     {-# INLINE fmap #-}
     fmap f a = WebContextT $ \c ->
         fmap (\(a', c') -> (f a', c')) $ runWebContextT a c
 
-instance (Functor m, Monad m) => Applicative (WebContextT node m) where
+instance (Functor m, Monad m) => Applicative (WebContextT node rezPath m) where
     pure = return
     (<*>) = ap
 
-instance (Monad m) => Monad (WebContextT node m) where
+instance (Monad m) => Monad (WebContextT node rezPath m) where
     {-# INLINE return #-}
     return a =
         WebContextT $ \c -> return (a, c)
@@ -115,19 +114,19 @@ instance (Monad m) => Monad (WebContextT node m) where
         (val', c') <- val c
         runWebContextT (f val') c'
 
-instance MonadTrans (WebContextT node) where
+instance MonadTrans (WebContextT node rezPath) where
     lift m = WebContextT $ \c -> do
         a <- m
         return (a, c)
 
-instance (MonadIO m) => MonadIO (WebContextT node m) where
+instance (MonadIO m) => MonadIO (WebContextT node rezPath m) where
     liftIO = lift . liftIO
 
 --------------------------------------------------
 ----            Context manipulation
 --------------------------------------------------
 
-emptyContext :: Context node
+emptyContext :: Context node rezPath
 emptyContext = Context
     { contextStack = []
     , currentNodes = None
@@ -141,38 +140,38 @@ emptyContext = Context
 --------------------------------------------------
 ----            Getter/Setter
 --------------------------------------------------
-setHttpDelay :: (Monad m) => Int -> WebContextT node m ()
+setHttpDelay :: (Monad m) => Int -> WebContextT node rezPath m ()
 setHttpDelay delay = WebContextT $ \c ->
         return ((), c{ httpDelay = delay })
 
-getHttpDelay :: (Monad m) => WebContextT node m Int
+getHttpDelay :: (Monad m) => WebContextT node rezPath m Int
 getHttpDelay = WebContextT $ \c -> return (httpDelay c, c)
 
-setOutput :: (Monad m) => Handle -> WebContextT node m ()
+setOutput :: (Monad m) => Handle -> WebContextT node rezPath m ()
 setOutput handle = WebContextT $ \c ->
         return ((), c{ defaultOutput = handle })
 
-setUserAgent :: (Monad m) => String -> WebContextT node m ()
+setUserAgent :: (Monad m) => String -> WebContextT node rezPath m ()
 setUserAgent usr = WebContextT $ \c ->
     return ((), c{ httpUserAgent = usr })
 
-getUserAgent :: (Monad m) => WebContextT node m String
+getUserAgent :: (Monad m) => WebContextT node rezPath m String
 getUserAgent = WebContextT $ \c -> return (httpUserAgent c, c)
 
-setLogLevel :: (Monad m) => LogLevel -> WebContextT node m ()
+setLogLevel :: (Monad m) => LogLevel -> WebContextT node rezPath m ()
 setLogLevel lvl = WebContextT $ \c ->
     return ((), c{logLevel = lvl})
 
-isVerbose :: (Monad m) => WebContextT node m Bool
+isVerbose :: (Monad m) => WebContextT node rezPath m Bool
 isVerbose = WebContextT $ \c -> 
     return (logLevel c == Verbose, c)
 
-pushCurrentState :: (Monad m) => WebContextT node m ()
+pushCurrentState :: (Monad m) => WebContextT node rezPath m ()
 pushCurrentState = WebContextT $ \c ->
         return ((), c{ contextStack = 
                         currentNodes c : contextStack c })
 
-popCurrentState :: (Monad m) => WebContextT node m ()
+popCurrentState :: (Monad m) => WebContextT node rezPath m ()
 popCurrentState = WebContextT $ \c ->
     case contextStack c of
          []     -> error "Empty context stack, implementation bug"
@@ -180,12 +179,12 @@ popCurrentState = WebContextT $ \c ->
             return ((), c{ contextStack = xs, currentNodes = x })
 
 evalWithEmptyContext :: (Monad m)
-                     => WebContextT node m a -> m a
+                     => WebContextT node rezPath m a -> m a
 evalWithEmptyContext val = do
     (finalVal, _context) <- runWebContextT val emptyContext
     return finalVal
 
-hasNodeLeft :: (Monad m) => WebContextT node m Bool
+hasNodeLeft :: (Monad m) => WebContextT node rezPath m Bool
 hasNodeLeft = WebContextT $ \c ->
     case currentNodes c of
       Nodes n -> return (not $ null n, c)
@@ -195,19 +194,19 @@ hasNodeLeft = WebContextT $ \c ->
 -- | Allow the interpreter to change the evaluation state of
 -- monad.
 setEvalState :: (Monad m)
-             => EvalState node -> WebContextT node m ()
+             => EvalState node rezPath -> WebContextT node rezPath m ()
 setEvalState st = WebContextT $ \c ->
     return ((), c { currentNodes = st })
 
-getEvalState :: (Monad m) => WebContextT node m (EvalState node)
+getEvalState :: (Monad m) => WebContextT node rezPath m (EvalState node rezPath)
 getEvalState = WebContextT $ \c ->
     return (currentNodes c, c)
 
 -- | Map operation performing it only if the evaluation
 -- state is a list of nodes.
-mapCurrentNodes :: (Monad m, GraphWalker node)
-                => (NodeContext node -> Maybe (NodeContext node))
-                -> WebContextT node m ()
+mapCurrentNodes :: (Monad m, GraphWalker node r)
+                => (NodeContext node rezPath -> Maybe (NodeContext node rezPath))
+                -> WebContextT node rezPath m ()
 mapCurrentNodes f = WebContextT $ \c ->
     case currentNodes c of
       Nodes nodes ->
@@ -217,7 +216,7 @@ mapCurrentNodes f = WebContextT $ \c ->
 
 -- | Return normal, error, verbose logger
 prepareLogger :: (Monad m)
-              => WebContextT node m (Logger, Logger, Logger)
+              => WebContextT node rezPath m (Logger, Logger, Logger)
 prepareLogger = WebContextT $ \c ->
     let silenceLog = \_ -> return ()
         errLog = hPutStrLn stderr
@@ -227,7 +226,7 @@ prepareLogger = WebContextT $ \c ->
       Normal -> return ((normalLog, errLog, silenceLog), c)
       Verbose -> return ((normalLog, errLog, normalLog), c)
 
-dumpCurrentState :: WebContextT node IO ()
+dumpCurrentState :: WebContextT node rezPath IO ()
 dumpCurrentState = WebContextT $ \c -> do
     case currentNodes c of
       None -> putStrLn "None" >> return ((), c)
@@ -237,15 +236,15 @@ dumpCurrentState = WebContextT $ \c -> do
 --------------------------------------------------
 ----            Unique bucket
 --------------------------------------------------
-setUniqueBucketCount :: (Monad m) => Int -> WebContextT node m ()
+setUniqueBucketCount :: (Monad m) => Int -> WebContextT node rezPath m ()
 setUniqueBucketCount count = WebContextT $ \c ->
     return ((), c{ uniqueBucket = listArray (0, count - 1) $ repeat Set.empty})
 
-hasResourceBeenVisited :: (Monad m) => Int -> String -> WebContextT node m Bool
+hasResourceBeenVisited :: (Monad m) => Int -> String -> WebContextT node rezPath m Bool
 hasResourceBeenVisited bucketId str = WebContextT $ \c ->
     return (str `Set.member` (uniqueBucket c ! bucketId), c)
 
-setResourceVisited :: (Monad m) => Int -> String -> WebContextT node m ()
+setResourceVisited :: (Monad m) => Int -> String -> WebContextT node rezPath m ()
 setResourceVisited bucketId str = WebContextT $ \c ->
     let buckets = uniqueBucket c
         newSet = Set.insert str $ buckets ! bucketId

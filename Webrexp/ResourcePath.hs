@@ -2,12 +2,10 @@
 -- handling URI & local path.
 module Webrexp.ResourcePath 
     ( ResourcePath (..)
-    , toRezPath
-    , (<//>)
-    , dumpResourcePath
     , rezPathToString
     ) where
 
+import Webrexp.GraphWalker
 import Control.Applicative
 import Control.Concurrent
 import Control.Monad.IO.Class
@@ -23,6 +21,11 @@ data ResourcePath =
     | Remote URI
     deriving (Eq, Show)
 
+instance GraphPath ResourcePath where
+    (<//>) = combinePath
+    importPath = toRezPath
+    dumpDataAtPath = dumpResourcePath 
+
 rezPathToString :: ResourcePath -> String
 rezPathToString (Local p) = p
 rezPathToString (Remote uri) = show uri
@@ -36,21 +39,21 @@ toRezPath s = case (parseURI s, isValid s, isRelativeReference s) of
 
 -- | Resource path combiner, similar to </> in use,
 -- but also handle URI.
-(<//>) :: ResourcePath -> ResourcePath -> ResourcePath
-(<//>) (Local a) (Local b) = Local $ (dropFileName a) </> b
-(<//>) (Remote a) (Remote b) =
+combinePath :: ResourcePath -> ResourcePath -> ResourcePath
+combinePath (Local a) (Local b) = Local $ (dropFileName a) </> b
+combinePath (Remote a) (Remote b) =
     case b `relativeTo` a of
          -- TODO : find another way for this
          Nothing -> error "Can't merge resourcepath" 
                    -- Remote a
          Just c -> Remote c
 
-(<//>) (Remote a) (Local b)
+combinePath (Remote a) (Local b)
     | isRelativeReference b = case parseRelativeReference b of
         Just r -> Remote . fromJust $ r `relativeTo` a
         Nothing -> error "Not possible, checked before"
-(<//>) (Local _) b@(Remote _) = b
-(<//>) _ _ = error "Mixing local/remote path"
+combinePath (Local _) b@(Remote _) = b
+combinePath _ _ = error "Mixing local/remote path"
 
 dumpResourcePath :: (Monad m, MonadIO m)
                  => (String -> m ()) -> ResourcePath -> m ()

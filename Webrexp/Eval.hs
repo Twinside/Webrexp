@@ -9,15 +9,14 @@ import Control.Applicative
 import Control.Monad
 import Data.Maybe ( catMaybes )
 
-import Webrexp.ResourcePath
 import Webrexp.GraphWalker
 import Webrexp.Exprtypes
 import Webrexp.WebContext
 
 import Webrexp.Log
 
-evalList :: (GraphWalker node)
-         => Bool -> [WebRexp] -> WebCrawler node Bool
+evalList :: (GraphWalker node rezPath)
+         => Bool -> [WebRexp] -> WebCrawler node rezPath Bool
 evalList _ [] = return True
 evalList isTail [x] = evalWebRexp' isTail x
 evalList isTail (x:xs) = do
@@ -29,8 +28,8 @@ evalList isTail (x:xs) = do
 
 -- | Evaluate a list of webrexp with a rollback system (reverting
 -- to the initial state for every list element).
-evalBranches :: (GraphWalker node)
-             => Bool -> [WebRexp] -> WebCrawler node Bool
+evalBranches :: (GraphWalker node rezPath)
+             => Bool -> [WebRexp] -> WebCrawler node rezPath Bool
 evalBranches _ [] = return True
 evalBranches isTail [x] = do
     popCurrentState
@@ -47,9 +46,9 @@ evalBranches isTail (x:xs) = do
        then evalBranches isTail xs
        else return False
 
-applyFunTillFalse :: (GraphWalker node)
-                  => (Bool -> a -> WebCrawler node Bool) -> Bool -> a
-                  -> WebCrawler node Bool
+applyFunTillFalse :: (GraphWalker node rezPath)
+                  => (Bool -> a -> WebCrawler node rezPath Bool) -> Bool -> a
+                  -> WebCrawler node rezPath Bool
 applyFunTillFalse f isTail obj = do
     valid <- f isTail obj
     if valid then applyFunTillFalse f isTail obj
@@ -58,7 +57,7 @@ applyFunTillFalse f isTail obj = do
 -- | For the current state, filter the value to keep
 -- only the values which are included in the node
 -- range.
-filterNodes :: [NodeRange] -> WebCrawler node Bool
+filterNodes :: [NodeRange] -> WebCrawler node rezPath Bool
 filterNodes ranges = getEvalState >>= \state ->
     case state of
          None -> return False
@@ -84,30 +83,32 @@ filterNodes ranges = getEvalState >>= \state ->
 
 
 -- | repeatidly eval the webrexp until a false is returned.
-evalTillFalse :: (GraphWalker node)
-              => Bool -> WebRexp -> WebCrawler node Bool
+evalTillFalse :: (GraphWalker node rezPath)
+              => Bool -> WebRexp -> WebCrawler node rezPath Bool
 evalTillFalse = applyFunTillFalse evalWebRexp'
 
 
 -- | Given a node search for valid children, check for their
 -- validity against the requirement.
-searchRefIn :: (GraphWalker node)
-            => WebRef -> [NodeContext node] -> [NodeContext node]
+searchRefIn :: (GraphWalker node rezPath)
+            => WebRef -> [NodeContext node rezPath]
+            -> [NodeContext node rezPath]
 searchRefIn ref = concatMap (searchRef ref)
-  where searchRef (Elem s) n = -- (\a -> trace ("ELEM: " ++ show(length a)) a)
+  where searchRef (Elem s) n =
             [ NodeContext {
                 parents = subP ++ parents n,
                 this = sub,
                 rootRef = rootRef n
             }  | (sub, subP) <- findNamed s $ this n]
-        searchRef (OfClass r s) n = -- (\a -> trace ("CLASS: " ++ show(length a)) a)
+        searchRef (OfClass r s) n =
             [v | v <- searchRef r n, attribOf "class" (this v) == Just s]
-        searchRef (Attrib  r s) n = -- (\a -> trace ("ATTRIB: " ++ show(length a)) a)
+        searchRef (Attrib  r s) n =
             [v | v <- searchRef r n, attribOf s (this v) /= Nothing]
-        searchRef (OfName  r s) n = -- (\a -> trace ("NAME: " ++ show(length a)) a)
+        searchRef (OfName  r s) n =
             [v | v <- searchRef r n, attribOf "id" (this v) == Just s]
 
-evalWebRexp :: (GraphWalker node) => WebRexp -> WebCrawler node Bool
+evalWebRexp :: (GraphWalker node rezPath)
+            => WebRexp -> WebCrawler node rezPath Bool
 evalWebRexp rexp = do
     setUniqueBucketCount count
     debugLog $ "Parsed as: " ++ show neorexp
@@ -120,7 +121,8 @@ evalWebRexp rexp = do
 -- the idea of 'tail' call, if we are at the tail of the expression
 -- we can discard some elements safely and thus reduce memory
 -- usage (which can be important)
-evalWebRexp' :: (GraphWalker node) => Bool -> WebRexp -> WebCrawler node Bool
+evalWebRexp' :: (GraphWalker node rezPath)
+             => Bool -> WebRexp -> WebCrawler node rezPath Bool
 evalWebRexp' isTail (Branch subs) = do
     debugLog "> '[... ; ...]'"
     pushCurrentState
@@ -187,12 +189,11 @@ evalWebRexp' _ (Unique bucket) = do
 
       Nodes ns -> do
           ns' <- filterM (liftM not . hasResourceBeenVisited bucket 
-                               . rezPathToString
-                               . rootRef) ns
+                               . show . rootRef) ns
           if null ns'
           	 then return False
           	 else do
-                mapM_ (\n -> let nname = rezPathToString $ rootRef n
+                mapM_ (\n -> let nname = show $ rootRef n
                              in do debugLog $ ">>> Marking " ++ nname
                                    setResourceVisited bucket nname) ns'
                 setEvalState $ Nodes ns'
@@ -248,9 +249,10 @@ evalWebRexp' _ Parent = do
               Just $ node { parents = ps
                           , this = n }
 
-downLinks :: (GraphWalker node)
-          => Maybe ResourcePath -> WebCrawler node (Maybe (NodeContext node))
-downLinks (Just path) = do
+downLinks :: (GraphWalker node rezPath)
+          => rezPath
+          -> WebCrawler node rezPath (Maybe (NodeContext node rezPath))
+downLinks path = do
     (norm, err, verbo) <- prepareLogger
     down <- accessGraph norm err verbo path
     case down of
@@ -259,21 +261,22 @@ downLinks (Just path) = do
                     NodeContext { parents = []
          	                    , rootRef = u
          	                    , this = n }
-downLinks Nothing = 
-    debugLog "# NO URL!!" >> return Nothing
 
-diggLinks :: (GraphWalker node) => EvalState node -> WebCrawler node Bool
+diggLinks :: (GraphWalker node rezPath)
+          => EvalState node rezPath
+          -> WebCrawler node rezPath Bool
 diggLinks (Nodes subs) = do
-    neoNodes <- catMaybes <$>
-                    sequence [ downLinks $ (rootRef s <//>) <$> indir
+    neoNodes <- catMaybes <$> sequence
+                [ downLinks $ rootRef s <//> indir
                                 | s <- subs
-                                , indir <- indirectLinks s ]
+                                , indir <- indirectLinks $ this s ]
     case neoNodes of
       [] -> setEvalState None >> return False
       lst -> setEvalState (Nodes lst) >> return True
 
 diggLinks (Strings str) = do
-    newDocs <- mapM (downLinks . toRezPath) str
+    newDocs <- mapM (maybe (return Nothing) downLinks
+                   . importPath) str
     case catMaybes newDocs of
          [] -> setEvalState None >> return False
          lst -> do setEvalState $ Nodes lst
@@ -284,8 +287,9 @@ diggLinks _ = do
     return False
 
 -- | Let access sibling nodes with a predefined index.
-siblingAccessor :: (GraphWalker node)
-                => Int -> NodeContext node -> Maybe (NodeContext node)
+siblingAccessor :: (GraphWalker node rezPath)
+                => Int -> NodeContext node rezPath
+                -> Maybe (NodeContext node rezPath)
 siblingAccessor 0   node = Just $ node
 siblingAccessor idx node =
     case parents node of
@@ -316,9 +320,12 @@ data ActionValue =
     | ATypeError
     deriving (Show)
 
-binArith :: (GraphWalker node)
-         => (ActionValue -> ActionValue -> ActionValue) -> Elem node -> ActionExpr -> ActionExpr
-         -> WebCrawler node (ActionValue, Elem node)
+binArith :: (GraphWalker node rezPath)
+         => (ActionValue -> ActionValue -> ActionValue) -- ^ Function to cal result
+         -> Elem node rezPath -- Actually evaluated element
+         -> ActionExpr       -- Left subaction (tree-like)
+         -> ActionExpr      -- Right subaction (tree-like)
+         -> WebCrawler node rezPath (ActionValue, Elem node rezPath)
 binArith f e sub1 sub2 = do
     (v1,e') <- evalAction sub1 e
     (v2, e'') <- evalAction sub2 e'
@@ -352,17 +359,19 @@ isActionResultValid (AInt 0) = False
 isActionResultValid ATypeError = False
 isActionResultValid _ = True
 
-data Elem node = ElemNode (NodeContext node)
-               | ElemString String
-               | NoElem
-areElemSames :: [Elem node] -> Bool
+data Elem node rezPath =
+    ElemNode (NodeContext node rezPath)
+  | ElemString String
+  | NoElem
+
+areElemSames :: [Elem node rezPath] -> Bool
 areElemSames [] = True
 areElemSames (x:xs) = all (same x) xs
     where same (ElemString _) (ElemString _) = True
           same (ElemNode _) (ElemNode _) = True
           same _ _ = False
 
-nodify :: [Elem node] -> EvalState node
+nodify :: [Elem node rezPath] -> EvalState node rezPath
 nodify [] = None
 nodify (NoElem:xs) = nodify xs
 nodify (ElemNode n:xs) = Nodes $ n : (catMaybes $ map isElem xs)
@@ -372,23 +381,27 @@ nodify (ElemString s:xs) = Strings $ s : (catMaybes $ map isStr xs)
     where isStr (ElemString  e) = Just e
           isStr _ = Nothing
 
-dumpActionVal :: ActionValue -> WebCrawler node ()
+dumpActionVal :: ActionValue -> WebCrawler node rezPath ()
 dumpActionVal (AString s) = textOutput s
 dumpActionVal _ = return ()
 
-dumpContent :: (GraphWalker node) => Elem node -> WebCrawler node (ActionValue, Elem node)
+dumpContent :: (GraphWalker node rezPath)
+            => Elem node rezPath
+            -> WebCrawler node rezPath (ActionValue, Elem node rezPath)
 dumpContent NoElem = return (ABool False, NoElem)
 dumpContent e@(ElemString str) = return (AString str, e)
 dumpContent e@(ElemNode ns) =
   case indirectLinks (this ns) of
     [] -> return (AString $ valueOf (this ns), e)
-    Just r -> do
-        dumpResourcePath (infoLog) $ (rootRef ns) <//> r
+    links -> do
+        mapM_ (\l -> dumpDataAtPath infoLog $
+                            (rootRef ns) <//> l) links
         return (ABool True, e)
 
 -- | Evaluate embedded action in WebRexp
-evalAction :: (GraphWalker node)
-           => ActionExpr -> Elem node -> WebCrawler node (ActionValue, Elem node)
+evalAction :: (GraphWalker node rezPath)
+           => ActionExpr -> Elem node rezPath
+           -> WebCrawler node rezPath (ActionValue, Elem node rezPath)
 evalAction (ActionExprs actions) e = foldM eval (ABool True, e) actions
     where eval v@(ABool False, _) _ = return v
           eval (_, el) act = evalAction act el
