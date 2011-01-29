@@ -347,8 +347,10 @@ dumpContent e@(Just (Node ns)) =
         return (ABool True, e)
 dumpContent e@(Just (Text str)) = return (AString str, e)
 dumpContent e@(Just (Blob b)) = do
-    liftIO $ B.writeFile (localizePath $ sourcePath b)
-                         (blobData b)
+    (norm, _, _) <- prepareLogger
+    let filename = localizePath $ sourcePath b
+    liftIO . norm $ "Dumping blob in " ++ filename
+    liftIO $ B.writeFile filename (blobData b)
     return (ABool True, e)
 
 -- | Evaluate embedded action in WebRexp
