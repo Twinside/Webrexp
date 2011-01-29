@@ -17,6 +17,8 @@ import System.Directory
 import System.FilePath
 import qualified Data.ByteString.Lazy as B
 
+import Webrexp.Remote.MimeTypes
+
 data ResourcePath =
       Local FilePath
     | Remote URI
@@ -68,9 +70,15 @@ dumpResourcePath _ src@(Local source) = do
     liftIO . copyFile source $ cwd </> extractFileName src
 
 dumpResourcePath loggers@(logger,_,_) p@(Remote a) = do
-  let filename = extractFileName p
-  liftIO . logger $ "Downloading '" ++ show a ++ "' in '" ++ filename
   (_, rsp) <- downloadBinary loggers a
+  let rawFilename = extractFileName p
+      filename = case retrieveHeaders HdrContentType rsp of
+         [] -> rawFilename 
+         (hdr:_) -> addContentTypeExtension
+                            (hdrValue hdr) rawFilename
+                 
+
+  liftIO . logger $ "Downloading '" ++ show a ++ "' in '" ++ filename
   liftIO . B.writeFile filename $ rspBody rsp
 
 downloadBinary :: (Monad m, MonadIO m)

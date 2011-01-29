@@ -201,7 +201,6 @@ evalWebRexp' _ DiggLink = do
     st <- getEvalState 
     concat <$> mapM diggLinks st >>= setEvalState
     hasNodeLeft
-    
 
 evalWebRexp' _ NextSibling = do
   debugLog "> '/'"

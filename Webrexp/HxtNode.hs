@@ -3,19 +3,19 @@
 module Webrexp.HxtNode( HxtNode ) where
 
 import Control.Monad.IO.Class
-import Network.HTTP
-
+import Data.Maybe
 import Data.Tree.NTree.TypeDefs
-import Text.XML.HXT.Parser.HtmlParsec
-import Text.XML.HXT.DOM.TypeDefs
-
+import Network.HTTP
 import System.Directory
+import Text.XML.HXT.DOM.TypeDefs
+import Text.XML.HXT.Parser.HtmlParsec
+
+import qualified Data.ByteString.Lazy.Char8 as B ( unpack )
 
 import Webrexp.ResourcePath
 import Webrexp.GraphWalker
 import Webrexp.Remote.MimeTypes
 
-import qualified Data.ByteString.Lazy.Char8 as B ( unpack )
 
 type HxtNode = NTree XNode
 
@@ -25,7 +25,7 @@ instance GraphWalker HxtNode ResourcePath where
     childrenOf = findChildren
     valueOf = valueOfNode
     nameOf = getName
-    indirectLinks _ = error "Unimplemented : indirectLinks"
+    indirectLinks = hyperNode
 
 valueOfNode :: HxtNode -> String
 valueOfNode (NTree (XText txt) _) = txt
@@ -45,6 +45,10 @@ findAttribute attrName (NTree (XTag _ attrList) _) =
             | localPart name == attrName = Just $ extractText values
         attrFinder (_:xs) = attrFinder xs
 findAttribute _ _ = Nothing
+
+hyperNode :: HxtNode -> [ResourcePath]
+hyperNode n = catMaybes [ attribOf "href" n >>= importPath
+                        , attribOf "src" n >>= importPath]
 
 findChildren :: HxtNode -> [HxtNode]
 findChildren (NTree (XTag _ _) children) = children
@@ -76,13 +80,20 @@ loadHtml (logger, _errLog, _verbose) (Local s) = do
 loadHtml loggers@(logger, _,  verbose) (Remote uri) = do
   liftIO . logger $ "Downloading URL : '" ++ show uri ++ "'"
   (u, rsp) <- downloadBinary loggers uri
-  liftIO . verbose $ "Downloaded (" ++ show u ++ ")"
   let contentType = retrieveHeaders HdrContentType rsp
   case contentType of
     [] -> return AccessError
-    (hdr:_) -> if isParseable $ hdrValue hdr
-        then return . Result (Remote u)
-                    . parseToHTMLNode 
-                    . B.unpack $ rspBody rsp
-        else return . DataBlob (Remote u) $ rspBody rsp
+    (hdr:_) ->
+       let logString = "Downloaded (" ++ show u ++ ") ["
+                        ++ hdrValue hdr ++ "] "
+       in if isParseable $ hdrValue hdr
+              then do
+                liftIO . verbose $ logString ++ "parsed"
+                let parsed = parseToHTMLNode 
+                            . B.unpack $ rspBody rsp
+                return $ Result (Remote u) parsed
+
+              else do
+                liftIO . verbose $ logString ++ "Binary Blob"
+                return . DataBlob (Remote u) $ rspBody rsp
 

@@ -190,7 +190,7 @@ evalWithEmptyContext val = do
     return finalVal
 
 hasNodeLeft :: (Monad m) => WebContextT node rezPath m Bool
-hasNodeLeft = WebContextT $ \c -> return (null $ currentNodes c, c)
+hasNodeLeft = WebContextT $ \c -> return (not . null $ currentNodes c, c)
 
 -- | Allow the interpreter to change the evaluation state of
 -- monad.
