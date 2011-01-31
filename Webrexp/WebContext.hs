@@ -1,4 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+-- | This module define the state carryied during the webrexp
+-- evaluation. This state is implemented as a monad transformer
+-- on top of 'IO'.
 module Webrexp.WebContext
     ( 
     -- * Types
@@ -64,13 +67,24 @@ type WebContext node rezPath a = WebContextT node rezPath Identity a
 -- | Represent a graph node and the path
 -- used to go up to it.
 data NodeContext node rezPath = NodeContext
-    { parents :: [(node, Int)]
-    , this :: node 
-    , rootRef :: rezPath
+    { -- | A path from the lass indirect node to this one
+      -- The parent node and the index of this node in the
+      -- parent's children is stored.
+      parents :: [(node, Int)] 
+
+      -- | Real node value
+    , this :: node              
+
+      -- | The last indirect path used to get to this node.
+    , rootRef :: rezPath       
     }
 
+-- | Represent a binary blob, often downloaded.
 data BinBlob rezPath = BinBlob
-    { sourcePath :: rezPath
+    { -- | The last indirect path used to get to this blob.
+      sourcePath :: rezPath
+
+      -- | The binary data
     , blobData :: B.ByteString
     }
 
@@ -81,7 +95,12 @@ data EvalState node rezPath =
     | Text String
     | Blob (BinBlob rezPath)
 
-data LogLevel = Quiet | Normal | Verbose deriving (Eq)
+-- | Type used to represent the current logging level.
+-- Default is 'Normal'
+data LogLevel = Quiet -- ^ Only display the dumped information
+              | Normal -- ^ Display dumped information and IOs
+              | Verbose -- ^ Display many debugging information
+              deriving (Eq)
 
 data Context node rezPath = Context
     { currentNodes :: [EvalState node rezPath]
@@ -145,10 +164,16 @@ emptyContext = Context
 --------------------------------------------------
 ----            Getter/Setter
 --------------------------------------------------
+
+-- | Setter for the wait time between two indirect
+-- operations.
+--
+-- The value is stored but not used yet.
 setHttpDelay :: (Monad m) => Int -> WebContextT node rezPath m ()
 setHttpDelay delay = WebContextT $ \c ->
         return ((), c{ httpDelay = delay })
 
+-- | return the value set by 'setHttpDelay'
 getHttpDelay :: (Monad m) => WebContextT node rezPath m Int
 getHttpDelay = WebContextT $ \c -> return (httpDelay c, c)
 
@@ -156,26 +181,38 @@ setOutput :: (Monad m) => Handle -> WebContextT node rezPath m ()
 setOutput handle = WebContextT $ \c ->
         return ((), c{ defaultOutput = handle })
 
+-- | Set the user agent which must be used for indirect operations
+--
+-- The value is stored but not used yet.
 setUserAgent :: (Monad m) => String -> WebContextT node rezPath m ()
 setUserAgent usr = WebContextT $ \c ->
     return ((), c{ httpUserAgent = usr })
 
+-- | return the value set by 'setUserAgent'
 getUserAgent :: (Monad m) => WebContextT node rezPath m String
 getUserAgent = WebContextT $ \c -> return (httpUserAgent c, c)
 
+-- | Set the value of the logging level.
 setLogLevel :: (Monad m) => LogLevel -> WebContextT node rezPath m ()
 setLogLevel lvl = WebContextT $ \c ->
     return ((), c{logLevel = lvl})
 
+-- | Tell if the current 'LoggingLevel' is set to 'Verbose'
 isVerbose :: (Monad m) => WebContextT node rezPath m Bool
 isVerbose = WebContextT $ \c -> 
     return (logLevel c == Verbose, c)
 
+-- | Internally the monad store a stack of state : the list
+-- of currently evaluated 'EvalState'. Pushing this context
+-- with store all the current nodes in it, waiting for later
+-- retrieval.
 pushCurrentState :: (Monad m) => WebContextT node rezPath m ()
 pushCurrentState = WebContextT $ \c ->
         return ((), c{ contextStack = 
                         currentNodes c : contextStack c })
 
+-- | Inverse operation of 'pushCurrentState', retrieve
+-- stored nodes.
 popCurrentState :: (Monad m) => WebContextT node rezPath m ()
 popCurrentState = WebContextT $ \c ->
     case contextStack c of
@@ -183,12 +220,18 @@ popCurrentState = WebContextT $ \c ->
          (x:xs) -> 
             return ((), c{ contextStack = xs, currentNodes = x })
 
+-- | Helper function used to start the evaluation of a webrexp
+-- with a default context, with sane defaults.
 evalWithEmptyContext :: (Monad m)
                      => WebContextT node rezPath m a -> m a
 evalWithEmptyContext val = do
     (finalVal, _context) <- runWebContextT val emptyContext
     return finalVal
 
+-- | Tell if there is any node left in the pipeline.
+-- After some operations, an absence of node result
+-- in a failure of execution and the evaluation of
+-- the webrexp must stop.
 hasNodeLeft :: (Monad m) => WebContextT node rezPath m Bool
 hasNodeLeft = WebContextT $ \c -> return (not . null $ currentNodes c, c)
 
@@ -199,6 +242,7 @@ setEvalState :: (Monad m)
 setEvalState st = WebContextT $ \c ->
     return ((), c { currentNodes = st })
 
+-- | Return the list of currently evaluated nodes.
 getEvalState :: (Monad m) => WebContextT node rezPath m [EvalState node rezPath]
 getEvalState = WebContextT $ \c ->
     return (currentNodes c, c)
@@ -215,6 +259,8 @@ prepareLogger = WebContextT $ \c ->
       Normal -> return ((normalLog, errLog, silenceLog), c)
       Verbose -> return ((normalLog, errLog, normalLog), c)
 
+-- | Debugging function used to dump the content of the
+-- evaluation pipeline when it's called.
 dumpCurrentState :: (GraphWalker node rezPath)
                  => WebContextT node rezPath IO ()
 dumpCurrentState = WebContextT $ \c -> do
@@ -226,14 +272,28 @@ dumpCurrentState = WebContextT $ \c -> do
 --------------------------------------------------
 ----            Unique bucket
 --------------------------------------------------
+
+-- | Initialisation function which must be called before the
+-- beginning of a webrexp execution.
+--
+-- Inform the monad of the number of 'Unique' bucket in the
+-- expression, permitting the allocation of the required number
+-- of Set to hold them.
 setUniqueBucketCount :: (Monad m) => Int -> WebContextT node rezPath m ()
 setUniqueBucketCount count = WebContextT $ \c ->
     return ((), c{ uniqueBucket = listArray (0, count - 1) $ repeat Set.empty})
 
+-- | Tell if a string has already been recorded for a bucket ID.
+-- Used for the implementation of the 'Unique' constructor of a webrexp.
+--
+-- Return False, unless 'setResourceVisited' has been called with the same
+-- string before.
 hasResourceBeenVisited :: (Monad m) => Int -> String -> WebContextT node rezPath m Bool
 hasResourceBeenVisited bucketId str = WebContextT $ \c ->
     return (str `Set.member` (uniqueBucket c ! bucketId), c)
 
+-- | Record the visit of a string. 'hasResourceBeenVisited' will return True
+-- for the same string after this call.
 setResourceVisited :: (Monad m) => Int -> String -> WebContextT node rezPath m ()
 setResourceVisited bucketId str = WebContextT $ \c ->
     let buckets = uniqueBucket c

@@ -1,3 +1,5 @@
+-- | Module implementing the parsing of webrexp.
+-- It shouldn't be used directly.
 module Webrexp.Parser( webRexpParser ) where
 
 import Control.Applicative( (<$>), (<*), (<$) )
@@ -15,6 +17,7 @@ import qualified Text.Parsec.Token as P
 webRexpParser :: ParsecT String st Identity WebRexp
 webRexpParser = webrexp 
 
+-- | Little shortcut.
 type Parsed st b = ParsecT String st Identity b
 
 -----------------------------------------------------------

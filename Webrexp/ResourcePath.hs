@@ -1,5 +1,6 @@
 -- | Module implementing plumbing to get a unified path locator,
--- handling URI & local path.
+-- handling URI & local path. Implement the 'GraphPath' and 'GraphWalker'
+-- typeclass with 'HxtNode'
 module Webrexp.ResourcePath 
     ( ResourcePath (..)
     , rezPathToString
@@ -19,8 +20,12 @@ import qualified Data.ByteString.Lazy as B
 
 import Webrexp.Remote.MimeTypes
 
+-- | Main data type
 data ResourcePath =
+    -- | Represent a file stored on the hard-drive of this
+    -- machine.
       Local FilePath
+    -- | Represent a ressource spread on internet.
     | Remote URI
     deriving (Eq, Show)
 
@@ -30,6 +35,10 @@ instance GraphPath ResourcePath where
     dumpDataAtPath = dumpResourcePath 
     localizePath = extractFileName
 
+-- | Given a ressource, transforme it to a string
+-- representation. This function should be used instead
+-- of the 'Show' instance, which is aimed at debugging
+-- only.
 rezPathToString :: ResourcePath -> String
 rezPathToString (Local p) = p
 rezPathToString (Remote uri) = show uri
@@ -81,6 +90,8 @@ dumpResourcePath loggers@(logger,_,_) p@(Remote a) = do
   liftIO . logger $ "Downloading '" ++ show a ++ "' in '" ++ filename
   liftIO . B.writeFile filename $ rspBody rsp
 
+-- | Helper function to grab a resource on internet and returning
+-- it's binary representation, and it's real place if any.
 downloadBinary :: (Monad m, MonadIO m)
                => Loggers -> URI -> m (URI, Response B.ByteString)
 downloadBinary (_, errLog, verbose) url = do

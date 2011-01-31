@@ -1,3 +1,6 @@
+-- | This module implement helper functions to determine if
+-- downloaded URI can be parsed as HTML/XML. Everything
+-- is based on MIME-TYPE.
 module Webrexp.Remote.MimeTypes ( ContentType
                                 , isParseable
                                 , addContentTypeExtension 
@@ -7,6 +10,7 @@ import System.FilePath
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 
+-- | Type alias to ease documentation.
 type ContentType = String
 
 findContentTypeOf :: ContentType -> ContentType
@@ -15,11 +19,16 @@ findContentTypeOf = fst . break (';' ==)
 -- | Take a Content-Type HTTP field value
 -- and tell if we can parse it. You don't
 -- need to take care about splitting it.
+--
+-- For exemple \"text/html; charset=UTF-8\"
+-- is an acceptable input, we will extract
+-- \"text/html\" ourselves.
 isParseable :: ContentType -> Bool
 isParseable s = Set.member (findContentTypeOf s)
                             parseableMimeTypes
              
 
+-- | Mime Types who can be parsed.
 parseableMimeTypes :: Set.Set ContentType
 parseableMimeTypes = Set.fromList
     [ "application/atom+xml"
@@ -34,6 +43,12 @@ parseableMimeTypes = Set.fromList
     , "text/xml"
     ]
 
+-- | Given a content type, the same as 'isParseable', and
+-- a filepath, we add a type extension if the the filepath
+-- don't have any.
+--
+-- The intent is to add a valid extension given a valid
+-- MIME-TYPE, to get correct OS behaviour.
 addContentTypeExtension :: ContentType -> FilePath -> FilePath
 addContentTypeExtension ctype path
     | hasExtension path = path
@@ -42,6 +57,7 @@ addContentTypeExtension ctype path
         Nothing -> path
         Just s -> path <.> s
 
+-- | Mimetype/extension association.
 mimeExtension :: Map.Map String String
 mimeExtension = Map.fromList
     [("application/atom+xml", "xml")

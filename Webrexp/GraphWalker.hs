@@ -1,12 +1,20 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
+-- | This module store the interface between the evaluator
+-- and the manipulated graph.
 module Webrexp.GraphWalker
-    ( GraphWalker(..)
+    ( 
+    -- * Classes
+      GraphWalker(..)
     , GraphPath(..)
+
+    -- * Commodity types
     , AccessResult(..)
     , Logger
     , Loggers
     , NodePath
+
+    -- * Helper functions.
     , findNamed
     , findFirstNamed 
     ) where
@@ -38,7 +46,8 @@ class (Show a) => GraphPath a where
     -- well specified).
     importPath :: String -> Maybe a
 
-    -- | Whatever that means
+    -- | Move semantic, try to dump the pointed
+    -- resource to the current folder.
     dumpDataAtPath :: (Monad m, MonadIO m)
                    => Loggers -> a
                    -> m ()
@@ -48,9 +57,18 @@ class (Show a) => GraphPath a where
     -- a node.
     localizePath :: a -> FilePath
 
-data AccessResult a path =
-      Result path a
-    | DataBlob path B.ByteString
+-- | Result of indirect access demand.
+data AccessResult a rezPath =
+    -- | We got a result and parsed it, maybe
+    -- it has changed of location, so we give
+    -- back the location
+      Result rezPath a
+     
+    -- | We got something, but we can't interpret
+    -- it, so we return a binary blob.
+    | DataBlob rezPath B.ByteString
+
+    -- | Cannot access the resource.
     | AccessError
 
 -- | The aim of this typeclass is to permit
@@ -58,7 +76,7 @@ data AccessResult a path =
 -- if the first one is found to be bad. All
 -- the logic should use this interface.
 --
--- Minimal implementation : accessGraph, attribOf, childrenOf, valueOf
+-- Minimal implementation : everything.
 class (Show a, GraphPath rezPath)
         => GraphWalker a rezPath | a -> rezPath where
     -- | Get back an attribute of the node

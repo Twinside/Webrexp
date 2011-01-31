@@ -1,3 +1,4 @@
+-- | Datatypes used to describe webrexps, and some helper functions.
 module Webrexp.Exprtypes
     ( 
     -- * Types
@@ -15,17 +16,18 @@ import Data.List( sort, mapAccumR )
 
 -- | represent an element
 data WebRef =
-    -- | ...
+    -- | ... Search for a named element.
       Elem String
-    -- | ... . ...
+    -- | ... . ...  Check the value of the \'class\' attribute
     | OfClass WebRef String
-    -- | @...
+    -- | \@... Check for the presence of an attribute
     | Attrib WebRef String
-    -- | #...
+    -- | #...  Check the value of the \'id\' attribute
     | OfName WebRef String
     deriving (Eq, Show)
 
 
+-- | Ranges to be able to filter nodes by position.
 data NodeRange =
     -- | ...
       Index Int
@@ -78,10 +80,21 @@ simplifyNodeRanges = simplifySortedNodeRanges . sort . map rangeRearranger
             | a > b = Interval b a
             | otherwise = i
 
+-- | Definitions of the operators available in
+-- the actions of the webrexp.
 data Op =
-      OpAdd | OpSub | OpMul | OpDiv
-    | OpLt  | OpLe  | OpGt  | OpGe
-    | OpEq  | OpNe  | OpAnd | OpOr
+      OpAdd -- ^ '+'
+    | OpSub -- ^ '-'
+    | OpMul -- ^ '*'
+    | OpDiv -- ^ 'div'
+    | OpLt  -- ^ '<'
+    | OpLe  -- ^ '<='
+    | OpGt  -- ^ '>'
+    | OpGe  -- ^ '>='
+    | OpEq  -- ^ \'=\' in webrexp ('==' in Haskell)
+    | OpNe  -- ^ \'!=\' ('/=' in Haskell)
+    | OpAnd -- ^ \'&\' ('&&' in Haksell)
+    | OpOr  -- ^ \'|\' ('||' in Haskell)
     deriving (Eq, Show)
 
 -- | Represent an action Each production
@@ -89,20 +102,31 @@ data Op =
 -- data constructor of this type.
 data ActionExpr =
     -- | { ... ; ... ; ... ; ... }
+    -- A list of action to execute, each
+    -- one must return a 'valid' value to
+    -- continue the evaluation
       ActionExprs [ActionExpr]
-    -- | Basic binary opertor
+
+    -- | Basic binary opertor application
     | BinOp Op ActionExpr ActionExpr
-    -- | Often find an attribute
+
+    -- | Find a value of a given attribute for
+    -- the current element.
     | ARef String
-    -- | Any number
+
+    -- | An integer constant.
     | CstI Int
-    -- | a string constant
+
+    -- | A string constant
     | CstS String
 
-    -- | '$'... operator
+    -- | \'$\'... operator
+    -- Used to put the action value back into
+    -- the evaluation pipeline.
     | NodeReplace ActionExpr
 
-    -- | the '.' action
+    -- | the '.' action. Dump the content of
+    -- the current element.
     | OutputAction
     deriving (Eq, Show)
 
@@ -119,42 +143,47 @@ data WebRexp =
     -- | ... +
     | Plus WebRexp
 
-    -- | 
+    -- | \'|\' Represent two alternative path, if
+    -- the first fail, the second one is taken
     | Alternative WebRexp WebRexp
 
-    -- | !
+    -- | \'!\'
     -- Possess an unique index to differentiate all the differents
     -- uniques. Negative value are considered invalid, all positive or
     -- null one are accepted.
     | Unique Int
 
-    -- | "..."
+    -- | \"...\" A string constant in the source expression.
     | Str String
-    -- { ... }
+
+    -- | \"{ ... }\"
     | Action ActionExpr
-    -- [ ... ]
+
+    -- | \'[ ... ]\' Filtering Range
     | Range [NodeRange]
 
-    -- every tag/class name
+    -- | every tag/class name
     | Ref WebRef
 
-    -- | '>' operator in the language, used
+    -- | \'>\' operator in the language, used
     -- to follow hyper link
     | DiggLink
 
-    -- | '/' operator in the language, used
+    -- | \'/\' operator in the language, used
     -- to select the next sibling node.
     | NextSibling
 
-    -- | '^' operator in the language, used
+    -- | \'^\' operator in the language, used
     -- to select the previous sibling node.
     | PreviousSibling
 
-    -- | '<' operator in the language. 
+    -- | \'<\' operator in the language. 
     -- Select the parent node
     | Parent
     deriving (Eq, Show)
 
+-- | This function permit the rewriting of a wabrexp in a depth-first
+-- fashion while carying out an accumulator.
 foldWebRexp :: (a -> WebRexp -> (a, WebRexp)) -> a -> WebRexp -> (a, WebRexp)
 foldWebRexp f acc (Branch subs) = f acc' $ Branch subs'
     where (acc', subs') = mapAccumR (foldWebRexp f) acc subs

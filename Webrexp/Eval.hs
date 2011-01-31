@@ -20,9 +20,9 @@ import qualified Data.ByteString.Lazy as B
 evalList :: (GraphWalker node rezPath)
          => Bool -> [WebRexp] -> WebCrawler node rezPath Bool
 evalList _ [] = return True
-evalList isTail [x] = evalWebRexp' isTail x
+evalList isTail [x] = breadthFirstEval isTail x
 evalList isTail (x:xs) = do
-    valid <- evalWebRexp' False x
+    valid <- breadthFirstEval False x
     if valid
        then evalList isTail xs
        else do debugLog "> FALSE [ .. ]"
@@ -38,12 +38,12 @@ evalBranches isTail [x] = do
     -- If we are the tail, we can drop
     -- the context without problem
     when (not isTail) pushCurrentState
-    evalWebRexp' isTail x
+    breadthFirstEval isTail x
 
 evalBranches isTail (x:xs) = do
     popCurrentState
     pushCurrentState
-    valid <- evalWebRexp' False x
+    valid <- breadthFirstEval False x
     if valid
        then evalBranches isTail xs
        else return False
@@ -81,7 +81,7 @@ filterNodes ranges = getEvalState >>= setEvalState . filtered
 -- | repeatidly eval the webrexp until a false is returned.
 evalTillFalse :: (GraphWalker node rezPath)
               => Bool -> WebRexp -> WebCrawler node rezPath Bool
-evalTillFalse = applyFunTillFalse evalWebRexp'
+evalTillFalse = applyFunTillFalse breadthFirstEval
 
 
 -- | Given a node search for valid children, check for their
@@ -107,7 +107,7 @@ evalWebRexp :: (GraphWalker node rezPath)
 evalWebRexp rexp = do
     setUniqueBucketCount count
     debugLog $ "Parsed as: " ++ show neorexp
-    evalWebRexp' True neorexp
+    breadthFirstEval True neorexp
     where (count, neorexp) = foldWebRexp uniqueCounter 0 rexp
           uniqueCounter acc (Unique _) = (acc + 1, Unique acc)
           uniqueCounter acc e = (acc, e)
@@ -116,41 +116,41 @@ evalWebRexp rexp = do
 -- the idea of 'tail' call, if we are at the tail of the expression
 -- we can discard some elements safely and thus reduce memory
 -- usage (which can be important)
-evalWebRexp' :: (GraphWalker node rezPath)
+breadthFirstEval :: (GraphWalker node rezPath)
              => Bool -> WebRexp -> WebCrawler node rezPath Bool
-evalWebRexp' isTail (Branch subs) = do
+breadthFirstEval isTail (Branch subs) = do
     debugLog "> '[... ; ...]'"
     pushCurrentState
     evalBranches isTail subs
 
-evalWebRexp' isTail (List subs) = do
+breadthFirstEval isTail (List subs) = do
     debugLog "> '[...]'"
     evalList isTail subs
 
-evalWebRexp' isTail (Star subs) = do
+breadthFirstEval isTail (Star subs) = do
     debugLog "> '...*'"
     evalTillFalse isTail subs
 
-evalWebRexp' isTail (Plus subs) = do
+breadthFirstEval isTail (Plus subs) = do
     debugLog "> '...+'"
-    once <- evalWebRexp' isTail subs
+    once <- breadthFirstEval isTail subs
     if once then do _ <- evalTillFalse isTail subs
                     return True
             else return False
 
-evalWebRexp' isTail (Alternative a b) = do
+breadthFirstEval isTail (Alternative a b) = do
     debugLog "> '...|...'"
-    leftValid <- evalWebRexp' False a
+    leftValid <- breadthFirstEval False a
     if leftValid
        then return True
-       else evalWebRexp' isTail b
+       else breadthFirstEval isTail b
 
-evalWebRexp' _ (Str str) = do
+breadthFirstEval _ (Str str) = do
     debugLog "> '\"...\"'"
     setEvalState $ [Text str]
     return True
 
-evalWebRexp' _ (Action action) = do
+breadthFirstEval _ (Action action) = do
     debugLog "> '{...}'"
     st <- getEvalState
     rez <- mapM (evalAction action . Just) st
@@ -162,7 +162,7 @@ evalWebRexp' _ (Action action) = do
     setEvalState justValids
     hasNodeLeft
 
-evalWebRexp' _ (Unique bucket) = do
+breadthFirstEval _ (Unique bucket) = do
     debugLog $ "> '!' (" ++ show bucket ++ ")"
     st <- getEvalState
     st' <- filterM visited st
@@ -179,7 +179,7 @@ evalWebRexp' _ (Unique bucket) = do
                     (setResourceVisited bucket s)
                return $ not seen
 
-evalWebRexp' _ (Ref ref) = do
+breadthFirstEval _ (Ref ref) = do
     debugLog $ "> 'ref' : " ++ show ref
     st <- getEvalState
     let st' = concatMap diggNode st
@@ -191,30 +191,30 @@ evalWebRexp' _ (Ref ref) = do
      where diggNode (Node n) = map Node $ searchRefIn ref n
            diggNode _ = []
 
-evalWebRexp' _ (Range subs) = do
+breadthFirstEval _ (Range subs) = do
     debugLog "> '[...]'"
     filterNodes subs
     return True
 
-evalWebRexp' _ DiggLink = do
+breadthFirstEval _ DiggLink = do
     debugLog "> '>'"
     st <- getEvalState 
     concat <$> mapM diggLinks st >>= setEvalState
     hasNodeLeft
 
-evalWebRexp' _ NextSibling = do
+breadthFirstEval _ NextSibling = do
   debugLog "> '/'"
   st <- getEvalState
   setEvalState . catMaybes $ map (siblingAccessor 1) st
   hasNodeLeft
 
-evalWebRexp' _ PreviousSibling = do
+breadthFirstEval _ PreviousSibling = do
   debugLog "> '^'"
   st <- getEvalState
   setEvalState . catMaybes $ map (siblingAccessor (-1)) st
   hasNodeLeft
 
-evalWebRexp' _ Parent = do
+breadthFirstEval _ Parent = do
   debugLog "> '<'"
   st <- getEvalState
   setEvalState $ concatMap parentExtractor st

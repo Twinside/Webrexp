@@ -1,5 +1,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+-- | This module implement the GraphWalker type class
+-- for node of HxT (Haskell Xml parser).
 module Webrexp.HxtNode( HxtNode ) where
 
 import Control.Monad.IO.Class
@@ -17,6 +19,8 @@ import Webrexp.GraphWalker
 import Webrexp.Remote.MimeTypes
 
 
+-- | This type is an instance of 'GraphWalker'
+-- with 'ResourcePath' as 'GraphPath'
 type HxtNode = NTree XNode
 
 instance GraphWalker HxtNode ResourcePath where
