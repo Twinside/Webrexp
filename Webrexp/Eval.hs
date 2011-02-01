@@ -16,8 +16,6 @@ import Webrexp.WebContext
 import Webrexp.Log
 import qualified Data.ByteString.Lazy as B
 
-
-
 -- | For the current state, filter the value to keep
 -- only the values which are included in the node
 -- range.
@@ -63,9 +61,7 @@ evalWebRexp rexp = do
     setUniqueBucketCount count
     debugLog $ "Parsed as: " ++ show neorexp
     breadthFirstEval True neorexp
-    where (count, neorexp) = foldWebRexp uniqueCounter 0 rexp
-          uniqueCounter acc (Unique _) = (acc + 1, Unique acc)
-          uniqueCounter acc e = (acc, e)
+    where (count, neorexp) = setUniqueIndices rexp
 
 
 -- | Evaluate the leaf nodes of a webrexp, this way the code
