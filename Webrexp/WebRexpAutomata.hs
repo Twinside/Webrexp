@@ -1,7 +1,12 @@
-module Webrexp.WebRexpAutomata ( Automata
+module Webrexp.WebRexpAutomata ( -- * Types
+                                 Automata
+                               , StateIndex
+
+                               -- * Automata manipulation
                                , buildAutomata
                                , dumpAutomata
-                               , toAutomata
+
+                               -- * Automata evaluation
                                , evalAutomata
                                , evalDepthFirst 
                                ) where
@@ -32,6 +37,8 @@ data AutomataState =
     -- action on False
     AutoState !AutomataAction !Int !Int
 
+-- | The automata representing a WebRexp,
+-- ready to be executed.
 data Automata = Automata
     { autoStates :: Array Int AutomataState
     , beginState :: Int
@@ -42,6 +49,10 @@ type StateListBuilder =
 
 type FreeId = Int
 type FirstState = Int
+
+
+-- | Simply the index of the state in a table.
+type StateIndex = Int
 
 nodeCount :: Automata -> Int
 nodeCount = sizer . bounds . autoStates
@@ -74,7 +85,10 @@ buildAutomata expr = Automata
 -- | Debug function dumping the automata in form of a
 -- graphviz file. The file can be used with the \'dot\'
 -- tool to produce a visualisation of the graph.
-dumpAutomata :: String -> Handle -> Automata -> IO ()
+dumpAutomata :: String      -- ^ Text used as title for the automata.
+             -> Handle      -- ^ Where the graphviz representation will be written.
+             -> Automata    -- ^ Automata to dump
+             -> IO ()
 dumpAutomata label h auto = do
     hPutStrLn h $ "// begin:" ++ show (beginState auto)
                  ++ " count:" ++ show (nodeCount auto)
@@ -123,7 +137,7 @@ dumpAutomata label h auto = do
 -- array after the generation, hence the propagation
 -- of different indexes.
 toAutomata :: WebRexp       -- ^ Expression to be transformed into an automata
-           -> Int           -- ^ Last free index
+           -> StateIndex    -- ^ Last free index
            -> AutomataSink  -- ^ The input/output for the current automata
            -- | The first unused, the index of the beggining state
            -- of the converted webrexp, and finaly the list of states.
@@ -191,7 +205,7 @@ toAutomata rest free (onTrue, onFalse) =
 -- | Main Evaluation function
 evalAutomata :: (GraphWalker node rezPath)
              => Automata                 -- ^ Automata to evaluate
-             -> Int                      -- ^ State to evaluate
+             -> StateIndex               -- ^ State to evaluate
              -> Bool                     -- ^ Are we coming from a true link.
              -> EvalState node rezPath   -- ^ Current evaluated element
              -> WebCrawler node rezPath Bool

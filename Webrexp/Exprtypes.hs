@@ -197,6 +197,8 @@ setUniqueIndices expr = foldWebRexp uniqueCounter 0 expr
           uniqueCounter acc e = (acc, e)
 
 
+-- | Pretty printing for 'WebRef'. It's should be reparsable
+-- by the WebRexp parser.
 prettyShowWebRef :: WebRef -> String
 prettyShowWebRef (Elem s) = s
 prettyShowWebRef (OfClass r s) = prettyShowWebRef r ++ "." ++ s

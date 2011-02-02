@@ -42,7 +42,6 @@ module Webrexp.WebContext
     -- * DFS evaluator
     -- ** Node list
     , recordNode 
-    , dropLastRecord 
     , popLastRecord 
 
     -- ** Branch context
@@ -307,18 +306,13 @@ dumpCurrentState = WebContextT $ \c -> do
 ----            Depth First evaluation
 --------------------------------------------------
 
+-- | Record a node in the context for the DFS evaluation.
 recordNode :: (Monad m)
            => (EvalState node rezPath, Int) -> WebContextT node rezPath m ()
 recordNode n = WebContextT $ \c ->
     return ((), c{ waitingStates = n : waitingStates c })
 
-dropLastRecord :: (Monad m)
-               => WebContextT node rezPath m ()
-dropLastRecord = WebContextT $ \c ->
-    case waitingStates c of
-      [] -> return ((), c)
-      (_:xs) -> return ((), c{ waitingStates = xs })
-
+-- | Get the last record from the top of the stack
 popLastRecord :: (Monad m)
               => WebContextT node rezPath m (EvalState node rezPath, Int)
 popLastRecord = WebContextT $ \c ->
@@ -327,12 +321,25 @@ popLastRecord = WebContextT $ \c ->
       (x:xs) -> return (x, c{ waitingStates = xs })
 
 
+-- | Add a \'frame\' context to the current DFS evaluation.
+-- A frame context possess a node to revert to and two counters.
+--
+--  * A counter for seen nodes which must be evaluated before
+--    backtracking
+--
+--  * A counter for valid node count, to keep track if the whole
+--    frame has a valid result or not.
+--
+-- You can look at 'popBranchContext' and 'addToBranchContext'
+-- for other frame manipulation functions.
 pushToBranchContext :: (Monad m)
                     => (EvalState node rezPath, Int, Int)
                     -> WebContextT node rezPath m ()
 pushToBranchContext cont = WebContextT $ \c ->
     return ((), c{ branchContext = cont : branchContext c })
 
+-- | Retrieve the frame on the top of the stack.
+-- for more information regarding frames see 'pushToBranchContext'
 popBranchContext :: (Monad m)
                  => WebContextT node rezPath m (EvalState node rezPath, Int, Int)
 popBranchContext = WebContextT $ \c ->
@@ -340,6 +347,10 @@ popBranchContext = WebContextT $ \c ->
       [] -> error "popBranchContext - empty branch context"
       (x:xs) -> return (x, c{ branchContext = xs })
 
+-- | Add seen node count and valid node count to the current
+-- frame.
+--
+-- for more information regarding frames see 'pushToBranchContext'
 addToBranchContext :: (Monad m)
                    => Int -> Int -> WebContextT node rezPath m ()
 addToBranchContext count validCount = WebContextT $ \c ->

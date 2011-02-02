@@ -1,10 +1,10 @@
 
+-- | Implementation of the (rather basic) logging facility. 
+--
+-- Avoid using 'putStrLn' or 'putStr' in the project, favor
+-- using this module.
 module Webrexp.Log ( 
-      errorLog
-    , infoLog
-    , networkInfo
-    , networkError
-    , debugLog
+      debugLog
     , textOutput 
     ) where
 
@@ -13,24 +13,17 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Webrexp.WebContext
 
-errorLog :: String -> WebCrawler node rezPath ()
-errorLog = liftIO . hPutStr stderr
-
-infoLog :: String -> WebCrawler node rezPath ()
-infoLog = liftIO . putStrLn
-
-networkInfo :: String -> WebCrawler node rezPath ()
-networkInfo = liftIO . putStrLn
-
-networkError :: String -> WebCrawler node rezPath ()
-networkError = liftIO . hPutStr stderr
-
+-- | Debugging function, only displayed in verbose
+-- logging mode.
 debugLog :: String -> WebCrawler node rezPath ()
 debugLog str = do
     verb <- isVerbose
     when (verb) (liftIO $ putStrLn str)
 
 
+-- | If a webrexp output some text, it must go through
+-- this function. It ensure the writting in the correct
+-- file.
 textOutput :: String -> WebCrawler node rezPath ()
 textOutput str = do
     handle <- getOutput
