@@ -10,6 +10,7 @@ import Control.Monad
 import Data.Array
 import System.IO
 
+import Webrexp.Log
 import Webrexp.Eval
 import Webrexp.GraphWalker
 import Webrexp.WebContext
@@ -50,8 +51,11 @@ nodeCount = sizer . bounds . autoStates
 -- | Simple function performing a depth first evaluation
 evalDepthFirst :: (GraphWalker node rezPath)
                => WebRexp -> WebCrawler node rezPath Bool
-evalDepthFirst expr = evalAutomata auto (beginState auto) True (Text "")
-    where auto = buildAutomata expr
+evalDepthFirst expr = do
+    debugLog $ "[Depth first, starting at " ++ show begin ++ "]"
+    evalAutomata auto (beginState auto) True (Text "")
+        where auto = buildAutomata expr
+              begin = beginState auto
 
 
 
@@ -59,7 +63,7 @@ evalDepthFirst expr = evalAutomata auto (beginState auto) True (Text "")
 -- automata.
 buildAutomata :: WebRexp -> Automata
 buildAutomata expr = Automata
-  { beginState = begin
+  { beginState = 0
   , autoStates = array (0, lastFree - 1) $ start : end : sts []
   }
    where start = (0, AutoState Push begin begin)
@@ -107,6 +111,7 @@ dumpAutomata label h auto = do
            subster '"' = "\\\""
            subster '\n' = "\\n"
            subster '\r' = "\\r"
+           subster '\\' = "\\\\"
            subster a = [a]
 
 -- | Main transformation function.
@@ -205,13 +210,16 @@ evalAutomataState :: (GraphWalker node rezPath)
                   -> EvalState node rezPath -- ^ Currently evaluated element
                   -> WebCrawler node rezPath Bool
 evalAutomataState a (AutoState Push onTrue _) _ e = do
+    debugLog "> Push"
     pushToBranchContext (e, 1, 0)
     evalAutomata a onTrue True e
     
-evalAutomataState a (AutoState AutoTrue onTrue _) _ e =
+evalAutomataState a (AutoState AutoTrue onTrue _) _ e = do
+    debugLog "> True"
     evalAutomata a onTrue True e
 
 evalAutomataState a (AutoState Pop onTrue onFalse) fromValid _ = do
+    debugLog "> Pop"
     (e', left, valid) <- popBranchContext
     let validAdd = if fromValid then 1 else 0
         neoValid = valid + validAdd
@@ -220,12 +228,13 @@ evalAutomataState a (AutoState Pop onTrue onFalse) fromValid _ = do
        then let nextState = if neoValid > 0 then onTrue else onFalse
             in evalAutomata a nextState (neoValid > 0) e'
 
-       else do addToBranchContext (-1) validAdd
+       else do pushToBranchContext (e', left - 1, neoValid)
        	       scheduleNextElement a
 
     
 
 evalAutomataState a (AutoState PopPush onTrue onFalse) fromValid _ = do
+    debugLog "> PopPush"
     (e', left, valid) <- popBranchContext
     let validAdd = if fromValid then 1 else 0
         neoValid = valid + validAdd
@@ -237,7 +246,7 @@ evalAutomataState a (AutoState PopPush onTrue onFalse) fromValid _ = do
                -- we don't push if we failed.
                else evalAutomata a onFalse False e'
 
-       else do addToBranchContext (-1) validAdd
+       else do pushToBranchContext (e', left - 1, neoValid)
        	       scheduleNextElement a
 
 

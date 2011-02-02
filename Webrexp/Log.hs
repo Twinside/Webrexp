@@ -34,5 +34,5 @@ debugLog str = do
 textOutput :: String -> WebCrawler node rezPath ()
 textOutput str = do
     handle <- getOutput
-    liftIO $ hPutStrLn handle str
+    liftIO $ hPutStr handle str
 
