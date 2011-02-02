@@ -191,7 +191,7 @@ breadthFirstEval isTail (Alternative a b) = do
        else breadthFirstEval isTail b
 
 breadthFirstEval _ (Range subs) = do
-    debugLog "> '[...]'"
+    debugLog "> '[.-.]'"
     filterNodes subs
     return True
 
@@ -200,7 +200,7 @@ breadthFirstEval _ expr = do
     st' <- mapM (evalWebRexpFor expr) st
     let valids = concat [lst | (v, lst) <- st', v ]
     setEvalState valids 
-    return $ null valids
+    hasNodeLeft
 
 
 downLinks :: (GraphWalker node rezPath)

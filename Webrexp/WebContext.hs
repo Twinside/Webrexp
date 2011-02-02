@@ -180,7 +180,7 @@ instance (MonadIO m) => MonadIO (WebContextT node rezPath m) where
 emptyContext :: Context node rezPath
 emptyContext = Context
     { contextStack = []
-    , currentNodes = []
+    , currentNodes = [Text ""]
     , waitingStates = []
     , branchContext = []
     , logLevel = Normal

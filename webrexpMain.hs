@@ -11,7 +11,9 @@ data Flag = Verbose
           | Quiet
           | Input String
           | Output String
+          | BfsEval
           | Help
+          | Graphviz
           | Delay Int
           deriving Eq
 
@@ -24,6 +26,10 @@ options =
     , Option "h"  ["help"]  (NoArg Help) "Display help (this screen)"
     , Option "d"  ["delay"] (ReqArg (Delay . read) "Delay")
             "Time to wait between HTTP request (ms)"
+    , Option ""   ["bfs"] (NoArg BfsEval)
+             "Evaluate in BFS order - This option might not remain in the future"
+    , Option ""   ["dot"] (NoArg Graphviz)
+             "Output the evaluation automata in graphviz format."
     ]
 
 hasInput :: Flag -> Bool
@@ -43,6 +49,8 @@ parseArgs args =
      where configurator c Verbose = return $ c{ verbose = True }
            configurator c Quiet = return $ c{ quiet = True }
            configurator c Help = return $ c{ showHelp = True }
+           configurator c Graphviz = return $ c { outputGraphViz = True }
+           configurator c BfsEval = return $ c { depthEvaluation = False }
            configurator c (Output "-") = return $ c { output = stdout }
            configurator c (Delay i) = return $ c { hammeringDelay = i }
            configurator c (Input fname) = do

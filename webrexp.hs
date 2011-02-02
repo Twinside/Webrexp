@@ -16,7 +16,9 @@ module Webrexp (
 import Control.Monad
 import Text.Parsec
 import System.IO
+import System.Exit
 
+import Webrexp.Log
 import Webrexp.Exprtypes
 import Webrexp.Parser( webRexpParser )
 import Webrexp.HxtNode
@@ -39,6 +41,7 @@ data Conf = Conf
     , expr :: String
     , showHelp :: Bool
     , depthEvaluation :: Bool
+    , outputGraphViz :: Bool
     }
 
 defaultConf :: Conf
@@ -50,6 +53,7 @@ defaultConf = Conf
     , quiet = False
     , expr = ""
     , showHelp = False
+    , outputGraphViz = False
     , depthEvaluation = True
     }
 
@@ -102,7 +106,11 @@ evalWebRexpWithConf conf =
         putStrLn $ show err
         return False
 
-    Right wexpr ->
+    Right wexpr -> do
+        when (outputGraphViz conf)
+             (do dumpAutomata (expr conf) stdout $ buildAutomata wexpr
+                 exitWith ExitSuccess)
+
         let crawled :: Crawled Bool = do
               setUserAgent $ userAgent conf
               setOutput $ output conf
@@ -111,11 +119,12 @@ evalWebRexpWithConf conf =
               when (verbose conf) (setLogLevel Verbose)
               if depthEvaluation conf
               	 then evalDepthFirst wexpr
-              	 else E.evalWebRexp wexpr
+              	 else do debugLog "BFS evaluation"
+              	         E.evalWebRexp wexpr
 
-        in do rez <- evalWithEmptyContext crawled
-              if output conf /= stdout
-                then hClose $ output conf
-                else return ()
-              return rez
+        rez <- evalWithEmptyContext crawled
+        if output conf /= stdout
+           then hClose $ output conf
+           else return ()
+        return rez
 
