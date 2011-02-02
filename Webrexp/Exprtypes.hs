@@ -10,6 +10,8 @@ module Webrexp.Exprtypes
     -- * Functions
     , simplifyNodeRanges 
     , foldWebRexp
+    , setUniqueIndices 
+    , prettyShowWebRef
     ) where
 
 import Data.List( sort, mapAccumR )
@@ -25,7 +27,6 @@ data WebRef =
     -- | #...  Check the value of the \'id\' attribute
     | OfName WebRef String
     deriving (Eq, Show)
-
 
 -- | Ranges to be able to filter nodes by position.
 data NodeRange =
@@ -106,7 +107,6 @@ data ActionExpr =
     -- one must return a 'valid' value to
     -- continue the evaluation
       ActionExprs [ActionExpr]
-
     -- | Basic binary opertor application
     | BinOp Op ActionExpr ActionExpr
 
@@ -142,26 +142,20 @@ data WebRexp =
     | Star WebRexp
     -- | ... +
     | Plus WebRexp
-
     -- | \'|\' Represent two alternative path, if
     -- the first fail, the second one is taken
     | Alternative WebRexp WebRexp
-
     -- | \'!\'
     -- Possess an unique index to differentiate all the differents
     -- uniques. Negative value are considered invalid, all positive or
     -- null one are accepted.
     | Unique Int
-
     -- | \"...\" A string constant in the source expression.
     | Str String
-
     -- | \"{ ... }\"
     | Action ActionExpr
-
     -- | \'[ ... ]\' Filtering Range
     | Range [NodeRange]
-
     -- | every tag/class name
     | Ref WebRef
 
@@ -194,4 +188,18 @@ foldWebRexp f acc (Star sub) = f acc' $ Star sub'
 foldWebRexp f acc (Plus sub) = f acc' $ Plus sub'
     where (acc', sub') = foldWebRexp f acc sub
 foldWebRexp f acc e = f acc e
+
+-- | Set the index for every unique, return the
+-- new webrexp and the count of unique element
+setUniqueIndices :: WebRexp -> (Int, WebRexp)
+setUniqueIndices expr = foldWebRexp uniqueCounter 0 expr
+    where uniqueCounter acc (Unique _) = (acc + 1, Unique acc)
+          uniqueCounter acc e = (acc, e)
+
+
+prettyShowWebRef :: WebRef -> String
+prettyShowWebRef (Elem s) = s
+prettyShowWebRef (OfClass r s) = prettyShowWebRef r ++ "." ++ s
+prettyShowWebRef (Attrib r s) = prettyShowWebRef r ++ "@" ++ s
+prettyShowWebRef (OfName r s) = prettyShowWebRef r ++ "#" ++ s
 

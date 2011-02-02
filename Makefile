@@ -12,9 +12,6 @@ clean:
 run:
 	cd debug; ./debug.sh 2>&1 | tee out.txt; cd ..
 
-test:
-	runhaskell downloadTest.hs -package bytestring -package network -package http
-
 doc:
 	runhaskell Setup.hs haddock --with-haddock=${HOME}/.cabal/bin/haddock
 

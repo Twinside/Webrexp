@@ -30,6 +30,9 @@ debugLog str = do
     verb <- isVerbose
     when (verb) (liftIO $ putStrLn str)
 
+
 textOutput :: String -> WebCrawler node rezPath ()
-textOutput = liftIO . putStrLn
+textOutput str = do
+    handle <- getOutput
+    liftIO $ hPutStr handle str
 

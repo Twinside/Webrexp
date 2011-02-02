@@ -63,11 +63,9 @@ data AccessResult a rezPath =
     -- it has changed of location, so we give
     -- back the location
       Result rezPath a
-     
     -- | We got something, but we can't interpret
     -- it, so we return a binary blob.
     | DataBlob rezPath B.ByteString
-
     -- | Cannot access the resource.
     | AccessError
 

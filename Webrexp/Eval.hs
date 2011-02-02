@@ -2,13 +2,13 @@ module Webrexp.Eval
     (
     -- * Functions
     evalWebRexp,
-    evalAction
+    evalAction,
+    evalWebRexpFor 
     ) where
 
 import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class
-import Data.Maybe
 
 import Webrexp.GraphWalker
 import Webrexp.Exprtypes
@@ -16,45 +16,6 @@ import Webrexp.WebContext
 
 import Webrexp.Log
 import qualified Data.ByteString.Lazy as B
-
-evalList :: (GraphWalker node rezPath)
-         => Bool -> [WebRexp] -> WebCrawler node rezPath Bool
-evalList _ [] = return True
-evalList isTail [x] = breadthFirstEval isTail x
-evalList isTail (x:xs) = do
-    valid <- breadthFirstEval False x
-    if valid
-       then evalList isTail xs
-       else do debugLog "> FALSE [ .. ]"
-       	       return False
-
--- | Evaluate a list of webrexp with a rollback system (reverting
--- to the initial state for every list element).
-evalBranches :: (GraphWalker node rezPath)
-             => Bool -> [WebRexp] -> WebCrawler node rezPath Bool
-evalBranches _ [] = return True
-evalBranches isTail [x] = do
-    popCurrentState
-    -- If we are the tail, we can drop
-    -- the context without problem
-    when (not isTail) pushCurrentState
-    breadthFirstEval isTail x
-
-evalBranches isTail (x:xs) = do
-    popCurrentState
-    pushCurrentState
-    valid <- breadthFirstEval False x
-    if valid
-       then evalBranches isTail xs
-       else return False
-
-applyFunTillFalse :: (GraphWalker node rezPath)
-                  => (Bool -> a -> WebCrawler node rezPath Bool) -> Bool -> a
-                  -> WebCrawler node rezPath Bool
-applyFunTillFalse f isTail obj = do
-    valid <- f isTail obj
-    if valid then applyFunTillFalse f isTail obj
-             else return True
 
 -- | For the current state, filter the value to keep
 -- only the values which are included in the node
@@ -76,13 +37,6 @@ filterNodes ranges = getEvalState >>= setEvalState . filtered
                 | i == b = e : discardLockstep xs ys
                 -- i > b
                 | otherwise = discardLockstep xs elist
-
-
--- | repeatidly eval the webrexp until a false is returned.
-evalTillFalse :: (GraphWalker node rezPath)
-              => Bool -> WebRexp -> WebCrawler node rezPath Bool
-evalTillFalse = applyFunTillFalse breadthFirstEval
-
 
 -- | Given a node search for valid children, check for their
 -- validity against the requirement.
@@ -108,68 +62,33 @@ evalWebRexp rexp = do
     setUniqueBucketCount count
     debugLog $ "Parsed as: " ++ show neorexp
     breadthFirstEval True neorexp
-    where (count, neorexp) = foldWebRexp uniqueCounter 0 rexp
-          uniqueCounter acc (Unique _) = (acc + 1, Unique acc)
-          uniqueCounter acc e = (acc, e)
+    where (count, neorexp) = setUniqueIndices rexp
 
--- | Evaluate an expression, the boolean is here to propagate
--- the idea of 'tail' call, if we are at the tail of the expression
--- we can discard some elements safely and thus reduce memory
--- usage (which can be important)
-breadthFirstEval :: (GraphWalker node rezPath)
-             => Bool -> WebRexp -> WebCrawler node rezPath Bool
-breadthFirstEval isTail (Branch subs) = do
-    debugLog "> '[... ; ...]'"
-    pushCurrentState
-    evalBranches isTail subs
 
-breadthFirstEval isTail (List subs) = do
-    debugLog "> '[...]'"
-    evalList isTail subs
-
-breadthFirstEval isTail (Star subs) = do
-    debugLog "> '...*'"
-    evalTillFalse isTail subs
-
-breadthFirstEval isTail (Plus subs) = do
-    debugLog "> '...+'"
-    once <- breadthFirstEval isTail subs
-    if once then do _ <- evalTillFalse isTail subs
-                    return True
-            else return False
-
-breadthFirstEval isTail (Alternative a b) = do
-    debugLog "> '...|...'"
-    leftValid <- breadthFirstEval False a
-    if leftValid
-       then return True
-       else breadthFirstEval isTail b
-
-breadthFirstEval _ (Str str) = do
+-- | Evaluate the leaf nodes of a webrexp, this way the code
+-- can be shared between the Breadth first evaluator and the
+-- Depth first one.
+evalWebRexpFor :: (GraphWalker node rezPath)
+               => WebRexp -> EvalState node rezPath
+               -> WebCrawler node rezPath (Bool, [EvalState node rezPath])
+evalWebRexpFor (Str str) _ = do
     debugLog "> '\"...\"'"
-    setEvalState $ [Text str]
-    return True
+    return (True, [Text str])
 
-breadthFirstEval _ (Action action) = do
+evalWebRexpFor (Action action) e = do
     debugLog "> '{...}'"
-    st <- getEvalState
-    rez <- mapM (evalAction action . Just) st
-    mapM_ (dumpActionVal . fst) rez
-    let justValids  = [el | (actRez, e) <- rez 
-                        , isActionResultValid actRez
-                        , let Just el = e]
-    debugLog $ ">>> left " ++ show (length justValids)
-    setEvalState justValids
-    hasNodeLeft
+    (rez, neoNode) <- evalAction action $ Just e
+    dumpActionVal rez
+    if isActionResultValid rez
+       then case neoNode of
+        Nothing -> return (True, [e])
+        Just new -> return (True, [new])
+       else return (False, [])
 
-breadthFirstEval _ (Unique bucket) = do
+evalWebRexpFor (Unique bucket) e = do
     debugLog $ "> '!' (" ++ show bucket ++ ")"
-    st <- getEvalState
-    st' <- filterM visited st
-    if null st'
-       then return False
-       else setEvalState st' >> hasNodeLeft
-
+    beenVisited <- visited e
+    return (beenVisited, [e])
      where visited (Node n) = checkUnique . show $ rootRef n
            visited (Text s) = checkUnique s
            visited (Blob b) = checkUnique . show $ sourcePath b
@@ -179,52 +98,110 @@ breadthFirstEval _ (Unique bucket) = do
                     (setResourceVisited bucket s)
                return $ not seen
 
-breadthFirstEval _ (Ref ref) = do
+evalWebRexpFor (Ref ref) (Node n) = do
     debugLog $ "> 'ref' : " ++ show ref
-    st <- getEvalState
-    let st' = concatMap diggNode st
-    debugLog $ ">>> found " ++ show (length st)
-             ++ "->"
-             ++ show (length st')
-    setEvalState st'
-    hasNodeLeft
-     where diggNode (Node n) = map Node $ searchRefIn ref n
-           diggNode _ = []
+    let n' = map Node $ searchRefIn ref n
+    debugLog $ ">>> found ->" ++ show (length n')
+    return (not $ null n', n')
+evalWebRexpFor (Ref _) _ = return (False, [])
+
+evalWebRexpFor DiggLink e = do
+    debugLog "> '>'"
+    e' <- diggLinks e
+    return (not $ null e', e')
+
+evalWebRexpFor NextSibling e = do
+  debugLog "> '/'"
+  case siblingAccessor 1 e of
+    Nothing -> return (False, [])
+    Just e' -> return (True, [e'])
+
+evalWebRexpFor PreviousSibling e = do
+  debugLog "> '^'"
+  case siblingAccessor (-1) e of
+    Nothing -> return (False, [])
+    Just e' -> return (True, [e'])
+
+evalWebRexpFor Parent (Node e) = do
+  debugLog "> '<'"
+  case parents e of
+      []       -> return (False, [])
+      (n,_):ps -> return (True, [Node $ e { parents = ps, this = n }])
+evalWebRexpFor Parent _ = return (False, [])
+
+evalWebRexpFor _ _ =
+    error "evalWebRexpFor - non terminal in terminal function."
+
+-- | Evaluate an expression, the boolean is here to propagate
+-- the idea of 'tail' call, if we are at the tail of the expression
+-- we can discard some elements safely and thus reduce memory
+-- usage (which can be important)
+breadthFirstEval :: (GraphWalker node rezPath)
+                 => Bool -> WebRexp -> WebCrawler node rezPath Bool
+breadthFirstEval isTail (Branch subs) = do
+    debugLog "> '[... ; ...]'"
+    pushCurrentState
+    evalBranches subs
+     where evalBranches [] = return True
+           evalBranches [x] = do
+               popCurrentState
+               -- If we are the tail, we can drop
+               -- the context without problem
+               when (not isTail)
+                    pushCurrentState
+               breadthFirstEval isTail x
+           
+           evalBranches (x:xs) = do
+               popCurrentState
+               pushCurrentState
+               valid <- breadthFirstEval False x
+               if valid
+                  then evalBranches xs
+                  else return False
+
+breadthFirstEval isTail (List subs) = debugLog "> '[...]'" >> evalList subs
+  where evalList [] = return True
+        evalList [x] = breadthFirstEval isTail x
+        evalList (x:xs) = do
+            valid <- breadthFirstEval False x
+            if valid
+               then evalList xs
+               else do debugLog "> FALSE [ .. ]"
+               	       return False
+
+
+breadthFirstEval isTail (Star subs) =
+    debugLog "> '...*'" >> evalTillFalse subs
+     where evalTillFalse obj = do
+             valid <- breadthFirstEval isTail obj
+             if valid then evalTillFalse obj
+                      else return True
+
+breadthFirstEval isTail (Plus subs) = do
+    debugLog "> '...+'"
+    once <- breadthFirstEval isTail subs
+    if once then breadthFirstEval isTail (Star subs)
+            else return False
+
+breadthFirstEval isTail (Alternative a b) = do
+    debugLog "> '...|...'"
+    leftValid <- breadthFirstEval False a
+    if leftValid
+       then return True
+       else breadthFirstEval isTail b
 
 breadthFirstEval _ (Range subs) = do
     debugLog "> '[...]'"
     filterNodes subs
     return True
 
-breadthFirstEval _ DiggLink = do
-    debugLog "> '>'"
-    st <- getEvalState 
-    concat <$> mapM diggLinks st >>= setEvalState
-    hasNodeLeft
+breadthFirstEval _ expr = do
+    st <- getEvalState
+    st' <- mapM (evalWebRexpFor expr) st
+    let valids = concat [lst | (v, lst) <- st', v ]
+    setEvalState valids 
+    return $ null valids
 
-breadthFirstEval _ NextSibling = do
-  debugLog "> '/'"
-  st <- getEvalState
-  setEvalState . catMaybes $ map (siblingAccessor 1) st
-  hasNodeLeft
-
-breadthFirstEval _ PreviousSibling = do
-  debugLog "> '^'"
-  st <- getEvalState
-  setEvalState . catMaybes $ map (siblingAccessor (-1)) st
-  hasNodeLeft
-
-breadthFirstEval _ Parent = do
-  debugLog "> '<'"
-  st <- getEvalState
-  setEvalState $ concatMap parentExtractor st
-  hasNodeLeft
-    where parentExtractor (Node node) =
-            case parents node of
-                []       -> []
-                (n,_):ps ->
-                    [Node $ node { parents = ps, this = n }]
-          parentExtractor _ = []
 
 downLinks :: (GraphWalker node rezPath)
           => rezPath
@@ -240,6 +217,9 @@ downLinks path = do
          	                    , rootRef = u
          	                    , this = n }]
 
+--------------------------------------------------
+----            Helper functions
+--------------------------------------------------
 diggLinks :: (GraphWalker node rezPath)
           => EvalState node rezPath
           -> WebCrawler node rezPath [EvalState node rezPath]
