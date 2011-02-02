@@ -133,31 +133,28 @@ toAutomata (List lst) free (onTrue, onFalse) =
     
 toAutomata (Branch (x:lst)) free (onTrue, onFalse) =
   (lastFree, firstSink
-  ,additionalStates . finalStates . listStates)
+  ,firstPush . finalStates . listStates)
     where firstSink = free
           firstPush = ((firstSink, AutoState Push branchBegin branchBegin):)
 
-          (falseSink, begin, additionalStates) = if length lst == 1
-                then (onFalse, free + 1, firstPush)
-                else (free + 1, free + 2
-                     , ((free + 1, AutoState Pop  onFalse     onFalse):) . firstPush)
-
-          transformExprs expr (True, new, toTrue, states) =
+          -- Code used for the last branch
+          transformExprs expr (True, new, (toTrue, toFalse), states) =
               let (freeId, subBegin, newStates) =
-                    toAutomata expr new (toTrue, onFalse)
-                  stackChange = ((freeId, AutoState Pop subBegin subBegin):)
-              in (False, freeId + 1, freeId, stackChange . newStates . states)
+                    toAutomata expr new (toTrue, toFalse)
+                  stackChange = ((freeId, AutoState Pop subBegin toFalse):)
+              in (False, freeId + 1, (freeId, freeId), stackChange . newStates . states)
 
-          transformExprs expr (_, new, toTrue, states) =
-              let (freeId, subBegin, newStates) = toAutomata expr new (toTrue, falseSink)
+          -- all except last and first
+          transformExprs expr (_, new, (toTrue, toFalse), states) =
+              let (freeId, subBegin, newStates) = toAutomata expr new (toTrue, toFalse)
                   stackChange = ((freeId, AutoState PopPush subBegin onFalse):)
-              in (False, freeId + 1, freeId, stackChange . newStates . states)
+              in (False, freeId + 1, (freeId, freeId), stackChange . newStates . states)
 
-          (_, listFree, listBegin, listStates) =
-              foldr transformExprs (True, begin, onTrue, id) lst
+          (_, listFree, (listBegin, lastFalseSink), listStates) =
+              foldr transformExprs (True, free + 1, (onTrue, onFalse), id) lst
 
           (lastFree, branchBegin, finalStates) =
-              toAutomata x listFree (listBegin, falseSink)
+              toAutomata x listFree (listBegin, lastFalseSink)
 
 toAutomata (Plus expr) free sinks =
     toAutomata (List [expr, Star expr]) free sinks
