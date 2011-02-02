@@ -1,4 +1,10 @@
-module Webrexp.WebRexpAutomata where
+module Webrexp.WebRexpAutomata ( Automata
+                               , buildAutomata
+                               , dumpAutomata
+                               , toAutomata
+                               , evalAutomata
+                               , evalDepthFirst 
+                               ) where
 
 import Control.Monad
 import Data.Array
@@ -40,6 +46,17 @@ nodeCount :: Automata -> Int
 nodeCount = sizer . bounds . autoStates
     where sizer (low, high) = high - low + 1
 
+
+-- | Simple function performing a depth first evaluation
+evalDepthFirst :: (GraphWalker node rezPath)
+               => WebRexp -> WebCrawler node rezPath Bool
+evalDepthFirst expr = evalAutomata auto (beginState auto) True (Text "")
+    where auto = buildAutomata expr
+
+
+
+-- | General function to translate a webrexp to an evaluation
+-- automata.
 buildAutomata :: WebRexp -> Automata
 buildAutomata expr = Automata
   { beginState = begin

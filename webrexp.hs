@@ -3,6 +3,7 @@
 module Webrexp ( 
                -- * Default evaluation
                  evalWebRexp
+               , evalWebRexpDepthFirst 
                , parseWebRexp
                , evalParsedWebRexp
 
@@ -24,7 +25,7 @@ import Webrexp.WebContext
 import qualified Webrexp.Eval as E
 
 -- we need the instance
-import Webrexp.HxtNode
+import Webrexp.HxtNode ()
 
 import Webrexp.WebRexpAutomata
 
@@ -37,6 +38,7 @@ data Conf = Conf
     , quiet :: Bool
     , expr :: String
     , showHelp :: Bool
+    , depthEvaluation :: Bool
     }
 
 defaultConf :: Conf
@@ -48,6 +50,7 @@ defaultConf = Conf
     , quiet = False
     , expr = ""
     , showHelp = False
+    , depthEvaluation = True
     }
 
 type Crawled a = WebCrawler HxtNode ResourcePath a
@@ -68,11 +71,19 @@ evalParsedWebRexp :: WebRexp -> IO Bool
 evalParsedWebRexp wexpr = evalWithEmptyContext crawled
  where crawled :: Crawled Bool = E.evalWebRexp wexpr
 
+-- | Simple evaluation function, evaluation is
+-- the breadth first type.
+evalWebRexp :: String -> IO Bool
+evalWebRexp = evalWebRexpWithEvaluator E.evalWebRexp
+
+evalWebRexpDepthFirst :: String -> IO Bool
+evalWebRexpDepthFirst = evalWebRexpWithEvaluator evalDepthFirst 
+
 -- | Simplest function to eval a webrexp.
 -- Return the evaluation status of the webrexp,
 -- True for full evaluation success.
-evalWebRexp :: String -> IO Bool
-evalWebRexp str = 
+evalWebRexpWithEvaluator :: (WebRexp -> Crawled Bool) -> String -> IO Bool
+evalWebRexpWithEvaluator evaluator str = 
   case runParser webRexpParser () "expr" str of
     Left err -> do
         putStrLn "Parsing error :\n"
@@ -80,7 +91,7 @@ evalWebRexp str =
         return False
 
     Right wexpr ->
-        let crawled :: Crawled Bool = E.evalWebRexp wexpr
+        let crawled :: Crawled Bool = evaluator wexpr
         in evalWithEmptyContext crawled
 
 evalWebRexpWithConf :: Conf -> IO Bool
@@ -98,7 +109,9 @@ evalWebRexpWithConf conf =
               setHttpDelay $ hammeringDelay conf
               when (quiet conf) (setLogLevel Quiet)
               when (verbose conf) (setLogLevel Verbose)
-              E.evalWebRexp wexpr
+              if depthEvaluation conf
+              	 then evalDepthFirst wexpr
+              	 else E.evalWebRexp wexpr
 
         in do rez <- evalWithEmptyContext crawled
               if output conf /= stdout
