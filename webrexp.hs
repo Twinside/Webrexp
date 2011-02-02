@@ -24,7 +24,10 @@ import Webrexp.WebContext
 import qualified Webrexp.Eval as E
 
 -- we need the instance
-import Webrexp.HxtNode()
+import Webrexp.HxtNode
+
+import Webrexp.WebRexpAutomata
+
 
 data Conf = Conf
     { hammeringDelay :: Int

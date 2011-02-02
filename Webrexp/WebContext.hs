@@ -19,6 +19,7 @@ module Webrexp.WebContext
     , getUserAgent 
     , setUserAgent 
     , setOutput 
+    , getOutput
     , getHttpDelay 
     , setHttpDelay 
     , isVerbose
@@ -37,6 +38,17 @@ module Webrexp.WebContext
     , getEvalState 
     , setEvalState 
     , dumpCurrentState
+
+    -- * DFS evaluator
+    -- ** Node list
+    , recordNode 
+    , dropLastRecord 
+    , popLastRecord 
+
+    -- ** Branch context
+    , pushToBranchContext 
+    , popBranchContext 
+    , addToBranchContext 
 
     -- ** Unicity manipulation function
     , setUniqueBucketCount 
@@ -102,14 +114,29 @@ data LogLevel = Quiet -- ^ Only display the dumped information
               | Verbose -- ^ Display many debugging information
               deriving (Eq)
 
+-- | Internal data context.
 data Context node rezPath = Context
-    { currentNodes :: [EvalState node rezPath]
+    { -- | Node list used in breadth-first evaluation
+      currentNodes :: [EvalState node rezPath]
+      -- | Context stack used in breadth-first evaluation
     , contextStack :: [[EvalState node rezPath]]
+
+      -- | State waiting to be executed in a depth-
+      -- first execution.
+    , waitingStates :: [(EvalState node rezPath, Int)]
+
+      -- | State used to implement branches in the depth
+      -- first evaluator.
+    , branchContext :: [(EvalState node rezPath, Int, Int)]
+
+      -- | Buckets used for uniqueness pruning, all
+      -- evaluation kind.
+    , uniqueBucket :: Array Int (Set.Set String) 
+      -- | Current log level
     , logLevel :: LogLevel
     , httpDelay :: Int
     , httpUserAgent :: String
     , defaultOutput :: Handle
-    , uniqueBucket :: Array Int (Set.Set String) 
     }
 
 --------------------------------------------------
@@ -154,6 +181,8 @@ emptyContext :: Context node rezPath
 emptyContext = Context
     { contextStack = []
     , currentNodes = []
+    , waitingStates = []
+    , branchContext = []
     , logLevel = Normal
     , httpDelay = 1500
     , httpUserAgent = ""
@@ -177,9 +206,14 @@ setHttpDelay delay = WebContextT $ \c ->
 getHttpDelay :: (Monad m) => WebContextT node rezPath m Int
 getHttpDelay = WebContextT $ \c -> return (httpDelay c, c)
 
+-- | Define the text output for written text.
 setOutput :: (Monad m) => Handle -> WebContextT node rezPath m ()
 setOutput handle = WebContextT $ \c ->
         return ((), c{ defaultOutput = handle })
+
+-- | Retrieve the default file output used for text.
+getOutput :: (Monad m) => WebContextT node rezPath m Handle
+getOutput = WebContextT $ \c -> return (defaultOutput c, c)
 
 -- | Set the user agent which must be used for indirect operations
 --
@@ -268,6 +302,51 @@ dumpCurrentState = WebContextT $ \c -> do
       Blob b -> putStrLn $ "Blob (" ++ (show $ sourcePath b) ++ ")"
       Node n -> putStrLn $ show (this n)
       Text s -> putStrLn s) (currentNodes c) >> return ((), c)
+
+--------------------------------------------------
+----            Depth First evaluation
+--------------------------------------------------
+
+recordNode :: (Monad m)
+           => (EvalState node rezPath, Int) -> WebContextT node rezPath m ()
+recordNode n = WebContextT $ \c ->
+    return ((), c{ waitingStates = n : waitingStates c })
+
+dropLastRecord :: (Monad m)
+               => WebContextT node rezPath m ()
+dropLastRecord = WebContextT $ \c ->
+    case waitingStates c of
+      [] -> return ((), c)
+      (_:xs) -> return ((), c{ waitingStates = xs })
+
+popLastRecord :: (Monad m)
+              => WebContextT node rezPath m (EvalState node rezPath, Int)
+popLastRecord = WebContextT $ \c ->
+    case waitingStates c of
+      [] -> error "popLAst Record - Empty stack!!!"
+      (x:xs) -> return (x, c{ waitingStates = xs })
+
+
+pushToBranchContext :: (Monad m)
+                    => (EvalState node rezPath, Int, Int)
+                    -> WebContextT node rezPath m ()
+pushToBranchContext cont = WebContextT $ \c ->
+    return ((), c{ branchContext = cont : branchContext c })
+
+popBranchContext :: (Monad m)
+                 => WebContextT node rezPath m (EvalState node rezPath, Int, Int)
+popBranchContext = WebContextT $ \c ->
+    case branchContext c of
+      [] -> error "popBranchContext - empty branch context"
+      (x:xs) -> return (x, c{ branchContext = xs })
+
+addToBranchContext :: (Monad m)
+                   => Int -> Int -> WebContextT node rezPath m ()
+addToBranchContext count validCount = WebContextT $ \c ->
+    case branchContext c of
+      [] -> error "addToBranchContext - empty context stack"
+      ((e,co,vc):xs) -> return ((), c{ branchContext = (e,co + count
+                                                      ,vc + validCount): xs})
 
 --------------------------------------------------
 ----            Unique bucket

@@ -2,7 +2,8 @@ module Webrexp.Eval
     (
     -- * Functions
     evalWebRexp,
-    evalAction
+    evalAction,
+    evalWebRexpFor 
     ) where
 
 import Control.Applicative

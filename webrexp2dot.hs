@@ -12,7 +12,7 @@ main = do
     case runParser webRexpParser () "expr" file of
         Left _ -> return ()
         Right e ->
-            dumpAutomata stdout 
+            dumpAutomata file stdout 
                     . buildAutomata 
                     . snd
                     $ setUniqueIndices e
