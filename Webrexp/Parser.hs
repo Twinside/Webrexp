@@ -150,11 +150,8 @@ actionList = (aexpr <$>
            aexpr b = ActionExprs b
 
 webrexp :: Parsed st WebRexp
-webrexp = (branch <$> sepBy1 exprPath
-                     (whiteSpace >> char ';' >> whiteSpace))
+webrexp = (Branch <$> sepEndBy1 exprPath (whiteSpace >> char ';' >> whiteSpace))
        <?> "webrexp"
-    where branch [a] = a
-          branch a = Branch a
 
 exprPath :: Parsed st WebRexp
 exprPath = (list <$> many1 expr)
