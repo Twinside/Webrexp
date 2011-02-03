@@ -341,7 +341,9 @@ evalAction :: (GraphWalker node rezPath)
                         (ActionValue, Maybe (EvalState node rezPath))
 evalAction (ActionExprs actions) e = foldM eval (ABool True, e) actions
     where eval v@(ABool False, _) _ = return v
-          eval (_, el) act = evalAction act el
+          eval (actionVal, el) act = do
+              dumpActionVal actionVal
+              evalAction act el
 
 evalAction (NodeReplace sub) e = do
     (val, el) <- evalAction sub e

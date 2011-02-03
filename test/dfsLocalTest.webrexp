@@ -1,8 +1,7 @@
 "dfsLocalTest.html" >
 { "<ul>\r\n" }
-    (div { "<li><a href=\"" }
-            ( h1 {.}{"\">"}
-            ; p {.}{ "</a></li>\r\n" })
+    (div ( h1 { "<li><a href=\""; .; "\">"}
+         ; p {.; "</a></li>\r\n" })
     ;)
 { "</ul>\r\n" }
 

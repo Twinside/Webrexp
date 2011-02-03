@@ -101,7 +101,7 @@ dumpAutomata label h auto = do
     hPutStrLn h "}"
      where printInfo (idx, AutoState act t f) = do
                let idxs = "i" ++ show idx
-               hPutStrLn h $ idxs ++ " [label=\"" ++ cleanShow act 
+               hPutStrLn h $ idxs ++ " [label=\"" ++ show idx ++ " : " ++ cleanShow act 
                                   ++ "\"," ++ shaper act ++ "];"
                if t == f && t >= 0
                	 then hPutStrLn h $ idxs ++ " -> i" ++ show t    
@@ -210,7 +210,9 @@ evalAutomata :: (GraphWalker node rezPath)
              -> WebCrawler node rezPath Bool
 evalAutomata auto i fromTrue e
     | i < 0 = return fromTrue
-    | otherwise = evalAutomataState auto 
+    | otherwise = do
+        debugLog $ "] State " ++ show i
+        evalAutomataState auto 
                     (autoStates auto ! i) fromTrue e
 
 -- | Pop a record and start evaluation for him.
