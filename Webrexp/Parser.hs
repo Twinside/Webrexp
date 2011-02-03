@@ -150,8 +150,14 @@ actionList = (aexpr <$>
            aexpr b = ActionExprs b
 
 webrexp :: Parsed st WebRexp
-webrexp = (Branch <$> sepEndBy1 exprPath (whiteSpace >> char ';' >> whiteSpace))
-       <?> "webrexp"
+webrexp = do path <- exprPath
+             rest <- (recParser <|> return [])
+             return . Branch $ path : rest
+    where separator = (whiteSpace >> char ';' >> whiteSpace)
+          recParser = separator >>
+           ((do p <- exprPath 
+                (recParser >>= return . (p :)) <|> return [p]) <|> return [List []])
+
 
 exprPath :: Parsed st WebRexp
 exprPath = (list <$> many1 expr)

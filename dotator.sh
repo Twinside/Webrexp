@@ -2,7 +2,7 @@
 
 for i in `ls test/*.webrexp`;
 do
-    runhaskell webrexp2dot.hs $i > temp
+    dist/build/Webrexp/webrexp -f $i --dot > temp
     dot -Tpdf -o "${i}.pdf" temp
 done
 
