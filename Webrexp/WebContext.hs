@@ -50,7 +50,8 @@ module Webrexp.WebContext
     , addToBranchContext 
 
     -- ** Unicity manipulation function
-    , setUniqueBucketCount 
+    , setBucketCount 
+    , incrementGetRangeCounter 
     , hasResourceBeenVisited
     , setResourceVisited
     )
@@ -62,7 +63,7 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Data.Functor.Identity
-import Data.Array
+import Data.Array.IO
 import qualified Data.Set as Set
 
 import qualified Data.ByteString.Lazy as B
@@ -130,7 +131,11 @@ data Context node rezPath = Context
 
       -- | Buckets used for uniqueness pruning, all
       -- evaluation kind.
-    , uniqueBucket :: Array Int (Set.Set String) 
+    , uniqueBucket :: IOArray Int (Set.Set String) 
+
+      -- | Counters used for range evaluation in DFS
+    , countBucket :: IOUArray Int Int
+
       -- | Current log level
     , logLevel :: LogLevel
     , httpDelay :: Int
@@ -186,7 +191,8 @@ emptyContext = Context
     , httpDelay = 1500
     , httpUserAgent = ""
     , defaultOutput = stdout
-    , uniqueBucket = array (0,0) []
+    , uniqueBucket = undefined
+    , countBucket = undefined
     }
 
 --------------------------------------------------
@@ -369,24 +375,43 @@ addToBranchContext count validCount = WebContextT $ \c ->
 -- Inform the monad of the number of 'Unique' bucket in the
 -- expression, permitting the allocation of the required number
 -- of Set to hold them.
-setUniqueBucketCount :: (Monad m) => Int -> WebContextT node rezPath m ()
-setUniqueBucketCount count = WebContextT $ \c ->
-    return ((), c{ uniqueBucket = listArray (0, count - 1) $ repeat Set.empty})
+setBucketCount :: (Monad m, MonadIO m)
+               => Int -- ^ Unique bucket count
+               -> Int -- ^ Range counter count
+               -> WebContextT node rezPath m ()
+setBucketCount uniquecount rangeCount = WebContextT $ \c -> do
+    arr <- liftIO $ newArray (0, uniquecount - 1) Set.empty
+    counter <- liftIO $ newArray (0, rangeCount - 1) 0
+    return ((), c{ uniqueBucket = arr
+                 , countBucket = counter })
+
+-- | Used for node range, return the current value of the
+-- counter and increment it.
+incrementGetRangeCounter :: (Monad m, MonadIO m)
+                         => Int -> WebContextT node rezPath m Int
+incrementGetRangeCounter bucket = WebContextT $ \c -> do
+    num <- liftIO $ countBucket c `readArray`bucket
+    liftIO . (countBucket c `writeArray` bucket) $ num + 1
+    return (num, c)
 
 -- | Tell if a string has already been recorded for a bucket ID.
 -- Used for the implementation of the 'Unique' constructor of a webrexp.
 --
 -- Return False, unless 'setResourceVisited' has been called with the same
 -- string before.
-hasResourceBeenVisited :: (Monad m) => Int -> String -> WebContextT node rezPath m Bool
-hasResourceBeenVisited bucketId str = WebContextT $ \c ->
-    return (str `Set.member` (uniqueBucket c ! bucketId), c)
+hasResourceBeenVisited :: (Monad m, MonadIO m)
+                       => Int -> String -> WebContextT node rezPath m Bool
+hasResourceBeenVisited bucketId str = WebContextT $ \c -> do
+    set <- liftIO $ uniqueBucket c `readArray`bucketId
+    return (str `Set.member` set, c)
 
 -- | Record the visit of a string. 'hasResourceBeenVisited' will return True
 -- for the same string after this call.
-setResourceVisited :: (Monad m) => Int -> String -> WebContextT node rezPath m ()
-setResourceVisited bucketId str = WebContextT $ \c ->
-    let buckets = uniqueBucket c
-        newSet = Set.insert str $ buckets ! bucketId
-    in return ((), c{ uniqueBucket = buckets // [(bucketId, newSet)]  })
-      
+setResourceVisited :: (Monad m, MonadIO m)
+                   => Int -> String -> WebContextT node rezPath m ()
+setResourceVisited bucketId str = WebContextT $ \c -> do
+    set <- liftIO $ uniqueBucket c `readArray` bucketId
+    let newSet = str `Set.insert` set
+    liftIO $ (uniqueBucket c `writeArray`bucketId) newSet
+    return ((), c)
+

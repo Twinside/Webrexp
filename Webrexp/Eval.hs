@@ -59,10 +59,10 @@ searchRefIn (OfName  r s) n =
 evalWebRexp :: (GraphWalker node rezPath)
             => WebRexp -> WebCrawler node rezPath Bool
 evalWebRexp rexp = do
-    setUniqueBucketCount count
+    setBucketCount count rangeCount
     debugLog $ "Parsed as: " ++ show neorexp
     breadthFirstEval True neorexp
-    where (count, neorexp) = setUniqueIndices rexp
+    where (count, rangeCount, neorexp) = assignWebrexpIndices rexp
 
 
 -- | Evaluate the leaf nodes of a webrexp, this way the code
@@ -190,7 +190,7 @@ breadthFirstEval isTail (Alternative a b) = do
        then return True
        else breadthFirstEval isTail b
 
-breadthFirstEval _ (Range subs) = do
+breadthFirstEval _ (Range _ subs) = do
     debugLog "> '[.-.]'"
     filterNodes subs
     return True

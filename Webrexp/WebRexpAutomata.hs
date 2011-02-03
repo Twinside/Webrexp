@@ -64,9 +64,11 @@ evalDepthFirst :: (GraphWalker node rezPath)
                => WebRexp -> WebCrawler node rezPath Bool
 evalDepthFirst expr = do
     debugLog $ "[Depth first, starting at " ++ show begin ++ "]"
+    setBucketCount count rangeCount
     evalAutomata auto (beginState auto) True (Text "")
-        where auto = buildAutomata expr
+        where auto = buildAutomata neorexp
               begin = beginState auto
+              (count, rangeCount, neorexp) = assignWebrexpIndices expr
 
 
 
@@ -196,9 +198,6 @@ toAutomata (Alternative a b) free (onTrue, onFalse) =
     where (bFree, bbeg, bStates) = toAutomata b free (onTrue, onFalse)
           (aFree, abeg, aStates) = toAutomata a bFree (onTrue, bbeg)
 
-toAutomata (Range _) _free (_onTrue, _onFalse) =
-    error "Range - not compilable yet"
-
 toAutomata rest free (onTrue, onFalse) =
     (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
 
@@ -269,6 +268,14 @@ evalAutomataState a (AutoState PopPush onTrue onFalse) fromValid _ = do
        else do pushToBranchContext (e', left - 1, neoValid)
        	       scheduleNextElement a
 
+evalAutomataState a (AutoState (AutoSimple (Range bucket ranges)) 
+                                onTrue onFalse) _ e = do
+    count <- incrementGetRangeCounter bucket
+    debugLog $ show ranges ++ " - [" ++ show bucket ++  "]" ++ show count ++ "  :"
+                ++ (show $ count `isInNodeRange` ranges)
+    if count `isInNodeRange` ranges
+       then evalAutomata a onTrue True e
+       else evalAutomata a onFalse False e
 
 evalAutomataState a (AutoState (AutoSimple rexp) onTrue onFalse) _ e = do
     (valid, subList) <- evalWebRexpFor rexp e
@@ -276,7 +283,7 @@ evalAutomataState a (AutoState (AutoSimple rexp) onTrue onFalse) _ e = do
     case subList of
       [] -> evalAutomata a onFalse False (Text "")
       (x:xs) -> do
-          mapM_ (recordNode . flip (,) nextState) xs
+          mapM_ (recordNode . flip (,) nextState) $ reverse xs
           addToBranchContext (length xs) 0
           evalAutomata a nextState valid x
 

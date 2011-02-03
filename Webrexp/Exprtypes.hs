@@ -10,8 +10,9 @@ module Webrexp.Exprtypes
     -- * Functions
     , simplifyNodeRanges 
     , foldWebRexp
-    , setUniqueIndices 
+    , assignWebrexpIndices 
     , prettyShowWebRef
+    , isInNodeRange
     ) where
 
 import Data.List( sort, mapAccumR )
@@ -35,6 +36,7 @@ data NodeRange =
     -- | min-max
     | Interval Int Int
     deriving (Eq, Show)
+
 
 instance Ord NodeRange where
     compare (Index a) (Index b) = compare a b
@@ -155,7 +157,9 @@ data WebRexp =
     -- | \"{ ... }\"
     | Action ActionExpr
     -- | \'[ ... ]\' Filtering Range
-    | Range [NodeRange]
+    -- The Int is used as an index for a counter 
+    -- in the DFS evaluator.
+    | Range Int [NodeRange]
     -- | every tag/class name
     | Ref WebRef
 
@@ -189,6 +193,11 @@ foldWebRexp f acc (Plus sub) = f acc' $ Plus sub'
     where (acc', sub') = foldWebRexp f acc sub
 foldWebRexp f acc e = f acc e
 
+assignWebrexpIndices :: WebRexp -> (Int, Int, WebRexp)
+assignWebrexpIndices expr = (uniqueCount, rangeCount, fexpr)
+    where (uniqueCount, expr') = setUniqueIndices expr
+          (rangeCount, fexpr) = setRangeIndices expr'
+
 -- | Set the index for every unique, return the
 -- new webrexp and the count of unique element
 setUniqueIndices :: WebRexp -> (Int, WebRexp)
@@ -197,6 +206,11 @@ setUniqueIndices expr = foldWebRexp uniqueCounter 0 expr
           uniqueCounter acc e = (acc, e)
 
 
+setRangeIndices :: WebRexp -> (Int, WebRexp)
+setRangeIndices expr = foldWebRexp uniqueCounter 0 expr
+    where uniqueCounter acc (Range _ r) = (acc + 1, Range acc r)
+          uniqueCounter acc e = (acc, e)
+
 -- | Pretty printing for 'WebRef'. It's should be reparsable
 -- by the WebRexp parser.
 prettyShowWebRef :: WebRef -> String
@@ -204,4 +218,17 @@ prettyShowWebRef (Elem s) = s
 prettyShowWebRef (OfClass r s) = prettyShowWebRef r ++ "." ++ s
 prettyShowWebRef (Attrib r s) = prettyShowWebRef r ++ "@" ++ s
 prettyShowWebRef (OfName r s) = prettyShowWebRef r ++ "#" ++ s
+
+-- | Helper function to check if a given in dex is within
+-- all the ranges
+isInNodeRange :: Int -> [NodeRange] -> Bool
+isInNodeRange _ [] = False
+isInNodeRange i (Index ii:xs)
+    | i == ii = True
+    | i < ii = False
+    | otherwise = isInNodeRange i xs
+isInNodeRange i (Interval beg end:xs)
+    | beg <= i && i <= end = True
+    | beg >= i = False
+    | otherwise = isInNodeRange i xs
 

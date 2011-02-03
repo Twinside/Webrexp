@@ -95,7 +95,7 @@ noderange = do
 
 rangeParser :: Parsed st WebRexp
 rangeParser = do
-    Range . simplifyNodeRanges <$> 
+    Range (-1) . simplifyNodeRanges <$> 
             sepBy noderange (whiteSpace >> char ',' >> whiteSpace)
                             <* whiteSpace
 
