@@ -151,13 +151,6 @@ toAutomata (List lst) free (onTrue, onFalse) =
                     toAutomata expr new (toTrue, onFalse)
            in (freeId, first, newStates . states)
 
-    
-toAutomata (Branch [x]) free (onTrue, onFalse) =
-  (lastFree, free, ([pushSt, popSt] ++) . states)
-    where (lastFree, begin, states) = toAutomata x (free + 2) (free + 1, free + 1)
-          pushSt = (free, AutoState Push begin begin)
-          popSt = (free + 1, AutoState Pop onTrue onFalse)
-
 toAutomata (Branch (x:lst)) free (onTrue, onFalse) =
   (lastFree, firstSink
   ,firstPush . finalStates . listStates)
