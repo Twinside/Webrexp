@@ -7,8 +7,11 @@ module Webrexp.WebRexpAutomata ( -- * Types
                                , dumpAutomata
 
                                -- * Automata evaluation
-                               , evalAutomata
+                               , evalAutomataDFS
+                               , evalAutomataBFS
+
                                , evalDepthFirst 
+                               , evalBreadthFirst 
                                ) where
 
 import Control.Monad
@@ -54,23 +57,13 @@ type FirstState = Int
 -- | Simply the index of the state in a table.
 type StateIndex = Int
 
+--------------------------------------------------
+----            Automata building
+--------------------------------------------------
+
 nodeCount :: Automata -> Int
 nodeCount = sizer . bounds . autoStates
     where sizer (low, high) = high - low + 1
-
-
--- | Simple function performing a depth first evaluation
-evalDepthFirst :: (GraphWalker node rezPath)
-               => WebRexp -> WebCrawler node rezPath Bool
-evalDepthFirst expr = do
-    debugLog $ "[Depth first, starting at " ++ show begin ++ "]"
-    setBucketCount count rangeCount
-    evalAutomata auto (beginState auto) True (Text "")
-        where auto = buildAutomata neorexp
-              begin = beginState auto
-              (count, rangeCount, neorexp) = assignWebrexpIndices expr
-
-
 
 -- | General function to translate a webrexp to an evaluation
 -- automata.
@@ -194,18 +187,33 @@ toAutomata (Alternative a b) free (onTrue, onFalse) =
 toAutomata rest free (onTrue, onFalse) =
     (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
 
+--------------------------------------------------
+----            DFS
+--------------------------------------------------
+
+-- | Simple function performing a depth first evaluation
+evalDepthFirst :: (GraphWalker node rezPath)
+               => WebRexp -> WebCrawler node rezPath Bool
+evalDepthFirst expr = do
+    debugLog $ "[Depth first, starting at " ++ show begin ++ "]"
+    setBucketCount count rangeCount
+    evalAutomataDFS auto (beginState auto) True (Text "")
+        where auto = buildAutomata neorexp
+              begin = beginState auto
+              (count, rangeCount, neorexp) = assignWebrexpIndices expr
+
 -- | Main Evaluation function
-evalAutomata :: (GraphWalker node rezPath)
+evalAutomataDFS :: (GraphWalker node rezPath)
              => Automata                 -- ^ Automata to evaluate
              -> StateIndex               -- ^ State to evaluate
              -> Bool                     -- ^ Are we coming from a true link.
              -> EvalState node rezPath   -- ^ Current evaluated element
              -> WebCrawler node rezPath Bool
-evalAutomata auto i fromTrue e
+evalAutomataDFS auto i fromTrue e
     | i < 0 = return fromTrue
     | otherwise = do
         debugLog $ "] State " ++ show i
-        evalAutomataState auto 
+        evalStateDFS auto 
                     (autoStates auto ! i) fromTrue e
 
 -- | Pop a record and start evaluation for him.
@@ -213,26 +221,26 @@ scheduleNextElement :: (GraphWalker node rezPath)
                     => Automata -> WebCrawler node rezPath Bool
 scheduleNextElement a = do
     (e, idx) <- popLastRecord
-    evalAutomata a idx True e
+    evalAutomataDFS a idx True e
 
 
 -- | Evaluation function for an element.
-evalAutomataState :: (GraphWalker node rezPath)
+evalStateDFS :: (GraphWalker node rezPath)
                   => Automata       -- ^ Evaluation automata
                   -> AutomataState  -- ^ Current state in the automata
                   -> Bool           -- ^ If we are coming from a True link or a False one
                   -> EvalState node rezPath -- ^ Currently evaluated element
                   -> WebCrawler node rezPath Bool
-evalAutomataState a (AutoState Push onTrue _) _ e = do
+evalStateDFS a (AutoState Push onTrue _) _ e = do
     debugLog "> Push"
     pushToBranchContext (e, 1, 0)
-    evalAutomata a onTrue True e
+    evalAutomataDFS a onTrue True e
     
-evalAutomataState a (AutoState AutoTrue onTrue _) _ e = do
+evalStateDFS a (AutoState AutoTrue onTrue _) _ e = do
     debugLog "> True"
-    evalAutomata a onTrue True e
+    evalAutomataDFS a onTrue True e
 
-evalAutomataState a (AutoState Pop onTrue onFalse) fromValid _ = do
+evalStateDFS a (AutoState Pop onTrue onFalse) fromValid _ = do
     debugLog "> Pop"
     (e', left, valid) <- popBranchContext
     let validAdd = if fromValid then 1 else 0
@@ -240,14 +248,14 @@ evalAutomataState a (AutoState Pop onTrue onFalse) fromValid _ = do
         neoCount = left - 1
     if neoCount == 0
        then let nextState = if neoValid > 0 then onTrue else onFalse
-            in evalAutomata a nextState (neoValid > 0) e'
+            in evalAutomataDFS a nextState (neoValid > 0) e'
 
        else do pushToBranchContext (e', left - 1, neoValid)
        	       scheduleNextElement a
 
     
 
-evalAutomataState a (AutoState PopPush onTrue onFalse) fromValid _ = do
+evalStateDFS a (AutoState PopPush onTrue onFalse) fromValid _ = do
     debugLog "> PopPush"
     (e', left, valid) <- popBranchContext
     let validAdd = if fromValid then 1 else 0
@@ -256,29 +264,124 @@ evalAutomataState a (AutoState PopPush onTrue onFalse) fromValid _ = do
     if neoCount == 0
        then if neoValid > 0
                then do pushToBranchContext (e', 1, 0)
-                       evalAutomata a onTrue True  e'        
+                       evalAutomataDFS a onTrue True  e'        
                -- we don't push if we failed.
-               else evalAutomata a onFalse False e'
+               else evalAutomataDFS a onFalse False e'
 
        else do pushToBranchContext (e', left - 1, neoValid)
        	       scheduleNextElement a
 
-evalAutomataState a (AutoState (AutoSimple (Range bucket ranges)) 
+evalStateDFS a (AutoState (AutoSimple (Range bucket ranges)) 
                                 onTrue onFalse) _ e = do
     count <- incrementGetRangeCounter bucket
     debugLog $ show ranges ++ " - [" ++ show bucket ++  "]" ++ show count ++ "  :"
                 ++ (show $ count `isInNodeRange` ranges)
     if count `isInNodeRange` ranges
-       then evalAutomata a onTrue True e
-       else evalAutomata a onFalse False e
+       then evalAutomataDFS a onTrue True e
+       else evalAutomataDFS a onFalse False e
 
-evalAutomataState a (AutoState (AutoSimple rexp) onTrue onFalse) _ e = do
+evalStateDFS a (AutoState (AutoSimple rexp) onTrue onFalse) _ e = do
     (valid, subList) <- evalWebRexpFor rexp e
     let nextState = if valid then onTrue else onFalse
     case subList of
-      [] -> evalAutomata a onFalse False (Text "")
+      [] -> evalAutomataDFS a onFalse False e
       (x:xs) -> do
           mapM_ (recordNode . flip (,) nextState) $ reverse xs
           addToBranchContext (length xs) 0
-          evalAutomata a nextState valid x
+          evalAutomataDFS a nextState valid x
 
+
+--------------------------------------------------
+----            BFS evaluation
+--------------------------------------------------
+evalBreadthFirst :: (GraphWalker node rezPath)
+                 => WebRexp -> WebCrawler node rezPath Bool
+evalBreadthFirst expr = do
+    debugLog $ "[Breadth first, starting at " ++ show begin ++ "]"
+    setBucketCount count 0
+    evalAutomataBFS auto (beginState auto) True [Text ""]
+        where auto = buildAutomata neorexp
+              begin = beginState auto
+              (count, _, neorexp) = assignWebrexpIndices expr
+
+evalAutomataBFS :: (GraphWalker node rezPath)
+                => Automata                 -- ^ Automata to evaluate
+                -> StateIndex               -- ^ State to evaluate
+                -> Bool                     -- ^ Are we coming from a true link.
+                -> [EvalState node rezPath] -- ^ Current evaluated element
+                -> WebCrawler node rezPath Bool
+evalAutomataBFS auto i fromTrue e
+    | i < 0 = return fromTrue
+    | otherwise = do
+        debugLog $ "] State " ++ show i
+        evalStateBFS auto 
+                    (autoStates auto ! i) fromTrue e
+
+
+-- | Main evaluation function for BFS evaluation.
+evalStateBFS :: (GraphWalker node rezPath)
+             => Automata       -- ^ Evaluation automata
+             -> AutomataState  -- ^ Current state in the automata
+             -> Bool           -- ^ If we are coming from a True link or a False one
+             -> [EvalState node rezPath]   -- ^ Currently evaluated elements
+             -> WebCrawler node rezPath Bool
+evalStateBFS a (AutoState Push onTrue _) _ e = do
+    debugLog "> Push"
+    pushCurrentState e
+    evalAutomataBFS a onTrue True e
+    
+evalStateBFS a (AutoState AutoTrue onTrue _) _ e = do
+    debugLog "> True"
+    evalAutomataBFS a onTrue True e
+
+evalStateBFS a (AutoState Pop onTrue _) True _ = do
+    debugLog "> Pop"
+    newList <- popCurrentState
+    evalAutomataBFS a onTrue True newList
+
+evalStateBFS a (AutoState Pop _ onFalse) False _ = do
+    debugLog "> Pop"
+    evalAutomataBFS a onFalse False []
+
+evalStateBFS a (AutoState PopPush _ onFalse) False _ = do
+    debugLog "> PushPop"
+    evalAutomataBFS a onFalse False []
+
+evalStateBFS a (AutoState PopPush onTrue _) True _ = do
+    debugLog "> PopPush"
+    newList <- popCurrentState
+    pushCurrentState newList
+    evalAutomataBFS a onTrue True newList
+
+evalStateBFS a (AutoState (AutoSimple (Range _ ranges)) 
+                                onTrue onFalse) _ e = do
+    let nodes = filterNodes ranges e
+        nextState = if null nodes then onFalse else onTrue
+    evalAutomataBFS a nextState (not $ null nodes) nodes
+
+evalStateBFS a (AutoState (AutoSimple rexp) onTrue onFalse) _ e = do
+    e' <- mapM (evalWebRexpFor rexp) e
+    let valids = concat [ lst | (v, lst) <- e', v ]
+        nextState = if null valids then onFalse else onTrue
+    evalAutomataBFS a nextState (not $ null valids) valids
+
+-- | For the current state, filter the value to keep
+-- only the values which are included in the node
+-- range.
+filterNodes :: [NodeRange] -> [a] -> [a]
+filterNodes ranges = filtered
+      where filtered = discardLockstep ranges . zip [0..]
+            discardLockstep [] _  = []
+            discardLockstep _  [] = []
+            discardLockstep rlist@(Index i:xs) elist@((i2,e):ys)
+                | i2 == i = e : discardLockstep xs ys
+                | i2 < i = discardLockstep rlist ys
+                -- i2 > i (should not arrise in practice)
+                | otherwise = discardLockstep xs elist
+            discardLockstep rlist@(Interval a b:xs) elist@((i,e):ys)
+                | i < a = discardLockstep rlist ys
+                -- i >= a
+                | i < b = e : discardLockstep rlist ys
+                | i == b = e : discardLockstep xs ys
+                -- i > b
+                | otherwise = discardLockstep xs elist

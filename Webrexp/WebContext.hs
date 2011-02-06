@@ -29,15 +29,11 @@ module Webrexp.WebContext
     
     -- * Implementation info
     -- ** Evaluation function
-    , hasNodeLeft 
     , prepareLogger 
 
     -- ** State manipulation functions
     , pushCurrentState 
     , popCurrentState 
-    , getEvalState 
-    , setEvalState 
-    , dumpCurrentState
 
     -- * DFS evaluator
     -- ** Node list
@@ -116,10 +112,8 @@ data LogLevel = Quiet -- ^ Only display the dumped information
 
 -- | Internal data context.
 data Context node rezPath = Context
-    { -- | Node list used in breadth-first evaluation
-      currentNodes :: [EvalState node rezPath]
-      -- | Context stack used in breadth-first evaluation
-    , contextStack :: [[EvalState node rezPath]]
+    { -- | Context stack used in breadth-first evaluation
+      contextStack :: [[EvalState node rezPath]]
 
       -- | State waiting to be executed in a depth-
       -- first execution.
@@ -184,7 +178,6 @@ instance (MonadIO m) => MonadIO (WebContextT node rezPath m) where
 emptyContext :: Context node rezPath
 emptyContext = Context
     { contextStack = []
-    , currentNodes = [Text ""]
     , waitingStates = []
     , branchContext = []
     , logLevel = Normal
@@ -245,19 +238,21 @@ isVerbose = WebContextT $ \c ->
 -- of currently evaluated 'EvalState'. Pushing this context
 -- with store all the current nodes in it, waiting for later
 -- retrieval.
-pushCurrentState :: (Monad m) => WebContextT node rezPath m ()
-pushCurrentState = WebContextT $ \c ->
-        return ((), c{ contextStack = 
-                        currentNodes c : contextStack c })
+pushCurrentState :: (Monad m)
+                 => [EvalState node rezPath]
+                 -> WebContextT node rezPath m ()
+pushCurrentState lst = WebContextT $ \c ->
+        return ((), c{ contextStack = lst : contextStack c })
 
 -- | Inverse operation of 'pushCurrentState', retrieve
 -- stored nodes.
-popCurrentState :: (Monad m) => WebContextT node rezPath m ()
+popCurrentState :: (Monad m)
+                => WebContextT node rezPath m [EvalState node rezPath]
 popCurrentState = WebContextT $ \c ->
     case contextStack c of
          []     -> error "Empty context stack, implementation bug"
          (x:xs) -> 
-            return ((), c{ contextStack = xs, currentNodes = x })
+            return (x, c{ contextStack = xs })
 
 -- | Helper function used to start the evaluation of a webrexp
 -- with a default context, with sane defaults.
@@ -266,25 +261,6 @@ evalWithEmptyContext :: (Monad m)
 evalWithEmptyContext val = do
     (finalVal, _context) <- runWebContextT val emptyContext
     return finalVal
-
--- | Tell if there is any node left in the pipeline.
--- After some operations, an absence of node result
--- in a failure of execution and the evaluation of
--- the webrexp must stop.
-hasNodeLeft :: (Monad m) => WebContextT node rezPath m Bool
-hasNodeLeft = WebContextT $ \c -> return (not . null $ currentNodes c, c)
-
--- | Allow the interpreter to change the evaluation state of
--- monad.
-setEvalState :: (Monad m)
-             => [EvalState node rezPath] -> WebContextT node rezPath m ()
-setEvalState st = WebContextT $ \c ->
-    return ((), c { currentNodes = st })
-
--- | Return the list of currently evaluated nodes.
-getEvalState :: (Monad m) => WebContextT node rezPath m [EvalState node rezPath]
-getEvalState = WebContextT $ \c ->
-    return (currentNodes c, c)
 
 -- | Return normal, error, verbose logger
 prepareLogger :: (Monad m)
@@ -297,16 +273,6 @@ prepareLogger = WebContextT $ \c ->
       Quiet -> return ((silenceLog, errLog, silenceLog), c)
       Normal -> return ((normalLog, errLog, silenceLog), c)
       Verbose -> return ((normalLog, errLog, normalLog), c)
-
--- | Debugging function used to dump the content of the
--- evaluation pipeline when it's called.
-dumpCurrentState :: (GraphWalker node rezPath)
-                 => WebContextT node rezPath IO ()
-dumpCurrentState = WebContextT $ \c -> do
-    mapM_ (\e -> case e of
-      Blob b -> putStrLn $ "Blob (" ++ (show $ sourcePath b) ++ ")"
-      Node n -> putStrLn $ show (this n)
-      Text s -> putStrLn s) (currentNodes c) >> return ((), c)
 
 --------------------------------------------------
 ----            Depth First evaluation

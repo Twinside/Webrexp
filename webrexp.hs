@@ -18,13 +18,11 @@ import Text.Parsec
 import System.IO
 import System.Exit
 
-import Webrexp.Log
 import Webrexp.Exprtypes
 import Webrexp.Parser( webRexpParser )
 import Webrexp.HxtNode
 import Webrexp.ResourcePath
 import Webrexp.WebContext
-import qualified Webrexp.Eval as E
 
 -- we need the instance
 import Webrexp.HxtNode ()
@@ -73,12 +71,12 @@ parseWebRexp str =
 -- many times.
 evalParsedWebRexp :: WebRexp -> IO Bool
 evalParsedWebRexp wexpr = evalWithEmptyContext crawled
- where crawled :: Crawled Bool = E.evalWebRexp wexpr
+ where crawled :: Crawled Bool = evalBreadthFirst wexpr
 
 -- | Simple evaluation function, evaluation is
 -- the breadth first type.
 evalWebRexp :: String -> IO Bool
-evalWebRexp = evalWebRexpWithEvaluator E.evalWebRexp
+evalWebRexp = evalWebRexpWithEvaluator evalBreadthFirst
 
 evalWebRexpDepthFirst :: String -> IO Bool
 evalWebRexpDepthFirst = evalWebRexpWithEvaluator evalDepthFirst 
@@ -119,8 +117,7 @@ evalWebRexpWithConf conf =
               when (verbose conf) (setLogLevel Verbose)
               if depthEvaluation conf
               	 then evalDepthFirst wexpr
-              	 else do debugLog "BFS evaluation"
-              	         E.evalWebRexp wexpr
+              	 else evalBreadthFirst wexpr
 
         rez <- evalWithEmptyContext crawled
         if output conf /= stdout

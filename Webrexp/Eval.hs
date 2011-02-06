@@ -1,7 +1,6 @@
 module Webrexp.Eval
     (
     -- * Functions
-    evalWebRexp,
     evalAction,
     evalWebRexpFor 
     ) where
@@ -16,27 +15,6 @@ import Webrexp.WebContext
 
 import Webrexp.Log
 import qualified Data.ByteString.Lazy as B
-
--- | For the current state, filter the value to keep
--- only the values which are included in the node
--- range.
-filterNodes :: [NodeRange] -> WebCrawler node rezPath ()
-filterNodes ranges = getEvalState >>= setEvalState . filtered
-      where filtered = discardLockstep ranges . zip [0..]
-            discardLockstep [] _  = []
-            discardLockstep _  [] = []
-            discardLockstep rlist@(Index i:xs) elist@((i2,e):ys)
-                | i2 == i = e : discardLockstep xs ys
-                | i2 < i = discardLockstep rlist ys
-                -- i2 > i (should not arrise in practice)
-                | otherwise = discardLockstep xs elist
-            discardLockstep rlist@(Interval a b:xs) elist@((i,e):ys)
-                | i < a = discardLockstep rlist ys
-                -- i >= a
-                | i < b = e : discardLockstep rlist ys
-                | i == b = e : discardLockstep xs ys
-                -- i > b
-                | otherwise = discardLockstep xs elist
 
 -- | Given a node search for valid children, check for their
 -- validity against the requirement.
@@ -55,14 +33,6 @@ searchRefIn (Attrib  r s) n =
     [v | v <- searchRefIn r n, attribOf s (this v) /= Nothing]
 searchRefIn (OfName  r s) n =
     [v | v <- searchRefIn r n, attribOf "id" (this v) == Just s]
-
-evalWebRexp :: (GraphWalker node rezPath)
-            => WebRexp -> WebCrawler node rezPath Bool
-evalWebRexp rexp = do
-    setBucketCount count rangeCount
-    debugLog $ "Parsed as: " ++ show neorexp
-    breadthFirstEval True neorexp
-    where (count, rangeCount, neorexp) = assignWebrexpIndices rexp
 
 
 -- | Evaluate the leaf nodes of a webrexp, this way the code
@@ -132,75 +102,6 @@ evalWebRexpFor Parent _ = return (False, [])
 evalWebRexpFor _ _ =
     error "evalWebRexpFor - non terminal in terminal function."
 
--- | Evaluate an expression, the boolean is here to propagate
--- the idea of 'tail' call, if we are at the tail of the expression
--- we can discard some elements safely and thus reduce memory
--- usage (which can be important)
-breadthFirstEval :: (GraphWalker node rezPath)
-                 => Bool -> WebRexp -> WebCrawler node rezPath Bool
-breadthFirstEval isTail (Branch subs) = do
-    debugLog "> '[... ; ...]'"
-    pushCurrentState
-    evalBranches subs
-     where evalBranches [] = return True
-           evalBranches [x] = do
-               popCurrentState
-               -- If we are the tail, we can drop
-               -- the context without problem
-               when (not isTail)
-                    pushCurrentState
-               breadthFirstEval isTail x
-           
-           evalBranches (x:xs) = do
-               popCurrentState
-               pushCurrentState
-               valid <- breadthFirstEval False x
-               if valid
-                  then evalBranches xs
-                  else return False
-
-breadthFirstEval isTail (List subs) = debugLog "> '[...]'" >> evalList subs
-  where evalList [] = return True
-        evalList [x] = breadthFirstEval isTail x
-        evalList (x:xs) = do
-            valid <- breadthFirstEval False x
-            if valid
-               then evalList xs
-               else do debugLog "> FALSE [ .. ]"
-               	       return False
-
-
-breadthFirstEval isTail (Star subs) =
-    debugLog "> '...*'" >> evalTillFalse subs
-     where evalTillFalse obj = do
-             valid <- breadthFirstEval isTail obj
-             if valid then evalTillFalse obj
-                      else return True
-
-breadthFirstEval isTail (Plus subs) = do
-    debugLog "> '...+'"
-    once <- breadthFirstEval isTail subs
-    if once then breadthFirstEval isTail (Star subs)
-            else return False
-
-breadthFirstEval isTail (Alternative a b) = do
-    debugLog "> '...|...'"
-    leftValid <- breadthFirstEval False a
-    if leftValid
-       then return True
-       else breadthFirstEval isTail b
-
-breadthFirstEval _ (Range _ subs) = do
-    debugLog "> '[.-.]'"
-    filterNodes subs
-    return True
-
-breadthFirstEval _ expr = do
-    st <- getEvalState
-    st' <- mapM (evalWebRexpFor expr) st
-    let valids = concat [lst | (v, lst) <- st', v ]
-    setEvalState valids 
-    hasNodeLeft
 
 
 downLinks :: (GraphWalker node rezPath)
