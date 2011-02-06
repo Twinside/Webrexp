@@ -325,11 +325,16 @@ evalStateBFS :: (GraphWalker node rezPath)
              -> Bool           -- ^ If we are coming from a True link or a False one
              -> [EvalState node rezPath]   -- ^ Currently evaluated elements
              -> WebCrawler node rezPath Bool
-evalStateBFS a (AutoState Push onTrue _) _ e = do
+evalStateBFS a (AutoState Push onTrue _) True e = do
     debugLog "> Push"
     pushCurrentState e
     evalAutomataBFS a onTrue True e
     
+evalStateBFS a (AutoState Push _ onFalse) False e = do
+    debugLog "> Push"
+    pushCurrentState e
+    evalAutomataBFS a onFalse False e
+
 evalStateBFS a (AutoState AutoTrue onTrue _) _ e = do
     debugLog "> True"
     evalAutomataBFS a onTrue True e
@@ -341,11 +346,14 @@ evalStateBFS a (AutoState Pop onTrue _) True _ = do
 
 evalStateBFS a (AutoState Pop _ onFalse) False _ = do
     debugLog "> Pop"
-    evalAutomataBFS a onFalse False []
+    newList <- popCurrentState
+    evalAutomataBFS a onFalse False newList
 
 evalStateBFS a (AutoState PopPush _ onFalse) False _ = do
     debugLog "> PushPop"
-    evalAutomataBFS a onFalse False []
+    newList <- popCurrentState
+    pushCurrentState newList
+    evalAutomataBFS a onFalse False newList
 
 evalStateBFS a (AutoState PopPush onTrue _) True _ = do
     debugLog "> PopPush"
