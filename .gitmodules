@@ -1,0 +1,3 @@
+[submodule "Webrexp.wiki"]
+	path = Webrexp.wiki
+	url = git@github.com:Twinside/Webrexp.wiki.git
