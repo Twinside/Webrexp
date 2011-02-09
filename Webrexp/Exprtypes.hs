@@ -7,12 +7,18 @@ module Webrexp.Exprtypes
     , Op (..)
     , ActionExpr (..)
     , WebRexp (..)
+    , RepeatCount  (..)
     -- * Functions
+    -- ** Transformations
     , simplifyNodeRanges 
     , foldWebRexp
     , assignWebrexpIndices 
     , prettyShowWebRef
+    , packRefFiltering 
+    -- ** Predicates
     , isInNodeRange
+    , isOperatorBoolean
+    , isActionPredicate
     ) where
 
 import Data.List( sort, mapAccumR )
@@ -27,7 +33,7 @@ data WebRef =
     | Attrib WebRef String
     -- | #...  Check the value of the \'id\' attribute
     | OfName WebRef String
-    deriving (Eq, Show)
+    deriving Show
 
 -- | Ranges to be able to filter nodes by position.
 data NodeRange =
@@ -98,6 +104,7 @@ data Op =
     | OpNe  -- ^ \'!=\' ('/=' in Haskell)
     | OpAnd -- ^ \'&\' ('&&' in Haksell)
     | OpOr  -- ^ \'|\' ('||' in Haskell)
+    | OpMatch -- ^ \'=~\' regexp matching
     deriving (Eq, Show)
 
 -- | Represent an action Each production
@@ -115,7 +122,6 @@ data ActionExpr =
     -- | Find a value of a given attribute for
     -- the current element.
     | ARef String
-
     -- | An integer constant.
     | CstI Int
 
@@ -130,8 +136,13 @@ data ActionExpr =
     -- | the '.' action. Dump the content of
     -- the current element.
     | OutputAction
-    deriving (Eq, Show)
+    deriving (Show)
 
+data RepeatCount =
+      RepeatTimes Int
+    | RepeatAtLeast Int
+    | RepeatBetween Int Int
+    deriving (Show)
 
 -- | Type representation of web-regexp,
 -- main type.
@@ -144,6 +155,8 @@ data WebRexp =
     | Star WebRexp
     -- | ... +
     | Plus WebRexp
+    -- | ... #{  }
+    | Repeat RepeatCount WebRexp
     -- | \'|\' Represent two alternative path, if
     -- the first fail, the second one is taken
     | Alternative WebRexp WebRexp
@@ -162,6 +175,11 @@ data WebRexp =
     | Range Int [NodeRange]
     -- | every tag/class name
     | Ref WebRef
+    -- | This constructor is an optimisation, it
+    -- combine an Ref followed by an action, where
+    -- every action is a predicate. Help pruning
+    -- quickly the evaluation tree in DFS evaluation.
+    | ConstrainedRef WebRef ActionExpr
 
     -- | \'>\' operator in the language, used
     -- to follow hyper link
@@ -178,7 +196,23 @@ data WebRexp =
     -- | \'<\' operator in the language. 
     -- Select the parent node
     | Parent
-    deriving (Eq, Show)
+    deriving Show
+
+-- | Tell if an action operator return a boolean
+-- operation. Useful to tell if an action is a
+-- predicate. See 'isActionPredicate'
+isOperatorBoolean :: Op -> Bool
+isOperatorBoolean op = elem op
+    [ OpLt, OpLe, OpGt, OpGe, OpEq, OpNe
+    , OpAnd, OpOr, OpMatch ]
+
+-- | Tell if an action is a predicate and is only
+-- used to filter nodes. Expression can be modified
+-- with this information to help prunning as soon
+-- as possible with the DFS evaluator.
+isActionPredicate :: ActionExpr -> Bool
+isActionPredicate (BinOp op _ _) = isOperatorBoolean op
+isActionPredicate _ = False
 
 -- | This function permit the rewriting of a wabrexp in a depth-first
 -- fashion while carying out an accumulator.
@@ -193,10 +227,41 @@ foldWebRexp f acc (Plus sub) = f acc' $ Plus sub'
     where (acc', sub') = foldWebRexp f acc sub
 foldWebRexp f acc e = f acc e
 
+-- | Preparation function for webrexp, assign all indices
+-- used for evaluation as an automata.
 assignWebrexpIndices :: WebRexp -> (Int, Int, WebRexp)
-assignWebrexpIndices expr = (uniqueCount, rangeCount, fexpr)
+assignWebrexpIndices expr = (uniqueCount, rangeCount, packRefFiltering fexpr)
     where (uniqueCount, expr') = setUniqueIndices expr
           (rangeCount, fexpr) = setRangeIndices expr'
+
+packRefFiltering :: WebRexp -> WebRexp
+packRefFiltering = snd . foldWebRexp packer ()
+  where packer () (List lst) = ((), List $ refActionFind lst)
+        packer () a = ((), a)
+
+        refActionFind [] = []
+        refActionFind (Ref a: Action act: xs) =
+            case actionSpliter act of
+              ([], _) -> Ref a : Action act : refActionFind xs
+              (some, []) ->
+                ConstrainedRef a (actioner some) : refActionFind xs
+              (some, [rest]) -> 
+                ConstrainedRef a (actioner some) : Action rest 
+                                                 : refActionFind xs
+              (some, rest) -> 
+                ConstrainedRef a (actioner some) : Action (actioner rest)
+                                                 : refActionFind xs
+
+        refActionFind (x:xs) = x : refActionFind xs
+
+        actioner [a] = a
+        actioner x = ActionExprs x
+
+        actionSpliter (ActionExprs exprs) =
+            break isActionPredicate exprs
+        actionSpliter a = if isActionPredicate a
+            then ([a], [])
+            else ([], [a])
 
 -- | Set the index for every unique, return the
 -- new webrexp and the count of unique element
@@ -206,6 +271,8 @@ setUniqueIndices expr = foldWebRexp uniqueCounter 0 expr
           uniqueCounter acc e = (acc, e)
 
 
+-- | Set the indices for the Range constructor (filtering
+-- by ID).
 setRangeIndices :: WebRexp -> (Int, WebRexp)
 setRangeIndices expr = foldWebRexp uniqueCounter 0 expr
     where uniqueCounter acc (Range _ r) = (acc + 1, Range acc r)

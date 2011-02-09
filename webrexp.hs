@@ -106,7 +106,8 @@ evalWebRexpWithConf conf =
 
     Right wexpr -> do
         when (outputGraphViz conf)
-             (do dumpAutomata (expr conf) stdout $ buildAutomata wexpr
+             (do let packed = packRefFiltering wexpr
+                 dumpAutomata (expr conf) stdout $ buildAutomata packed
                  exitWith ExitSuccess)
 
         let crawled :: Crawled Bool = do

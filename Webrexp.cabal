@@ -20,6 +20,7 @@ Executable webrexp
                  bytestring >= 0.9.1.7 && < 1.0,
                  containers >= 0.3,
                  array >= 0.3,
+                 regex-pcre-builtin >= 0.94,
                  filepath
                  -- Webrexp
 
@@ -41,5 +42,6 @@ Library
                  bytestring >= 0.9.1.7 && < 1.0,
                  containers >= 0.3,
                  array >= 0.3,
+                 regex-pcre-builtin >= 0.94,
                  filepath
 

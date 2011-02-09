@@ -1,5 +1,6 @@
 
 import Control.Monad
+import qualified Control.Exception as E
 import System.Console.GetOpt
 import System.Environment
 import System.IO
@@ -60,8 +61,8 @@ parseArgs args =
                file <- openFile fname WriteMode
                return $ c{ output = file }
 
-main :: IO ()
-main = do
+mainProgram :: IO ()
+mainProgram = do
     args <- getArgs
     c <- parseArgs args
     if showHelp c
@@ -73,3 +74,10 @@ main = do
                   then exitWith ExitSuccess
                   else exitWith $ ExitFailure 1
 
+main :: IO ()
+main =
+    E.catch mainProgram
+          (\e -> do
+              let err = show (e :: E.AsyncException)
+              putStrLn $ "Error : " ++ err
+              return ())

@@ -112,6 +112,8 @@ dumpAutomata label h auto = do
            cleanShow (AutoSimple (Ref ref)) = "<" ++ prettyShowWebRef ref ++ ">"
            cleanShow (AutoSimple (Str str)) = "\\\"" ++ concatMap subster str ++ "\\\""
            cleanShow (AutoSimple (Action _)) = "{ }"
+           cleanShow (AutoSimple (ConstrainedRef ref _)) =
+               "<" ++ prettyShowWebRef ref ++ "> {}"
            cleanShow a = concatMap subster $ show a
 
            shaper (AutoSimple _) = ""
@@ -171,6 +173,27 @@ toAutomata (Branch (x:lst)) free (onTrue, onFalse) =
 
 toAutomata (Plus expr) free sinks =
     toAutomata (List [expr, Star expr]) free sinks
+
+-- For repetition, we simply create a list replicated n times
+-- and convert it to an automata
+toAutomata (Repeat (RepeatTimes n) expr) free sinks =
+    toAutomata (List $ replicate n expr) free sinks
+-- For a minimum occurence count, we replicate the minimum
+-- and star the maximum.
+toAutomata (Repeat (RepeatAtLeast n) expr) free sinks =
+    toAutomata (List [List $ replicate n expr
+                     ,Star expr]) free sinks
+-- My favorite...
+toAutomata (Repeat (RepeatBetween n m) expr) free (onTrue, onFalse) =
+  (minFree, minBegin, states . middleStates)
+    where (minFree, minBegin, states) =
+              toAutomata (List $ replicate n expr)
+                         middleFree (middleBegin, onFalse)
+
+          (middleFree, middleBegin, middleStates) =
+              toAutomata (List $ replicate (m - n) expr)
+                         free
+                         (onTrue, onTrue)
 
 toAutomata (Star expr) free (onTrue, _onFalse) =
   (lastFree, beginning, (trueState :) . states)

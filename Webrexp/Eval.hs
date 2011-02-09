@@ -8,6 +8,7 @@ module Webrexp.Eval
 import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class
+import Text.Regex.PCRE
 
 import Webrexp.GraphWalker
 import Webrexp.Exprtypes
@@ -67,6 +68,15 @@ evalWebRexpFor (Unique bucket) e = do
                when (not seen)
                     (setResourceVisited bucket s)
                return $ not seen
+
+evalWebRexpFor (ConstrainedRef s action) e = do
+    ref@(valid, lst) <- evalWebRexpFor (Ref s) e
+    if not valid
+      then return ref
+      else do
+      	lst'  <- mapM (evalWebRexpFor $ Action action) lst
+      	return (any fst lst', concat $ map snd lst')
+      	  
 
 evalWebRexpFor (Ref ref) (Node n) = do
     debugLog $ "> 'ref' : " ++ show ref
@@ -186,6 +196,11 @@ intOnly :: (Int -> Int -> Int) -> ActionValue -> ActionValue -> ActionValue
 intOnly f (AInt a) (AInt b) = AInt $ f a b
 intOnly _ _ _ = ATypeError
 
+stringPredicate :: (String -> String -> Bool) -> ActionValue 
+                -> ActionValue -> ActionValue
+stringPredicate f (AString a) (AString b) = ABool $ f a b
+stringPredicate _ _ _= ATypeError
+
 intComp :: (Int -> Int -> Bool) -> ActionValue -> ActionValue -> ActionValue
 intComp f (AInt a) (AInt b) = ABool $ f a b
 intComp _ _ _ = ATypeError
@@ -268,6 +283,8 @@ evalAction (ARef r) e@(Just (Node n)) = do
 evalAction (ARef _) _ =
     return (ATypeError, Nothing)
 
+evalAction (BinOp OpMatch a b) e =
+    binArith (stringPredicate (=~)) e a b
 evalAction (BinOp OpAdd a b) e = binArith (intOnly (+)) e a b
 evalAction (BinOp OpSub a b) e = binArith (intOnly (-)) e a b
 evalAction (BinOp OpMul a b) e = binArith (intOnly (*)) e a b

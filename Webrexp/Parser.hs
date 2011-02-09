@@ -52,7 +52,7 @@ lexer  = P.makeTokenParser
          (haskellStyle { P.reservedOpNames = [ "&", "|", "<", ">"
                                              , "*", "/", "+", "-"
                                              , "^", "=", "!", ":"
-                                             , "_", "$", "#"
+                                             , "_", "$", "#", "~"
                                              ]
                        , P.identStart = letter
                        } )
@@ -63,7 +63,8 @@ lexer  = P.makeTokenParser
 webrexpCombinator :: OperatorTable String st Identity WebRexp
 webrexpCombinator =
     [ [ postfix "*" Star
-      , postfix "+" Plus ]
+      , postfix "+" Plus
+      , Postfix repeatOperator ]
     , [ binary "|" Alternative AssocLeft ]
     ]
 
@@ -75,6 +76,7 @@ operatorDefs =
       ,binary "-" (BinOp OpSub) AssocLeft]
     , [binary "=" (BinOp OpEq)  AssocRight
       ,binary "!=" (BinOp OpNe) AssocLeft
+      ,binary "=~" (BinOp OpMatch) AssocLeft
       ,binary "<" (BinOp OpLt)  AssocLeft
       ,binary ">"  (BinOp OpGt) AssocLeft
       ,binary "<=" (BinOp OpLe) AssocLeft
@@ -107,6 +109,30 @@ webrexpOp =  spaceSurrounded ops
              <|> (Parent <$ char '<')
              <|> (Unique (-1) <$ char '!')
              <?> "webrexpOp"
+
+repeatCount :: Parsed st RepeatCount
+repeatCount = do
+    begin <- fromInteger <$> natural
+    parseComma begin <|> (return $ RepeatTimes begin)
+     where parseComma firstNum = do
+             whiteSpace
+             _ <- char ','
+             whiteSpace
+             parseLastNumber firstNum <|> (return $ 
+                                        RepeatAtLeast firstNum) 
+                
+           parseLastNumber firstNum = do
+              endNum <- fromInteger <$> natural
+              return $ RepeatBetween firstNum endNum
+
+repeatOperator :: Parsed st (WebRexp -> WebRexp)
+repeatOperator = do
+    _ <- string "#{"
+    whiteSpace
+    counts <- repeatCount
+    whiteSpace
+    _ <- char '}'
+    return $ Repeat counts
 
 webident :: Parsed st String
 webident = many1 (alphaNum <|> char '-' <|> char '_')

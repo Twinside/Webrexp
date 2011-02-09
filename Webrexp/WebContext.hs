@@ -279,7 +279,7 @@ prepareLogger = WebContextT $ \c ->
 --------------------------------------------------
 
 -- | Record a node in the context for the DFS evaluation.
-recordNode :: (Monad m)
+recordNode :: (Monad m) 
            => (EvalState node rezPath, Int) -> WebContextT node rezPath m ()
 recordNode n = WebContextT $ \c ->
     return ((), c{ waitingStates = n : waitingStates c })
