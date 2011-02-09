@@ -52,7 +52,7 @@ lexer  = P.makeTokenParser
          (haskellStyle { P.reservedOpNames = [ "&", "|", "<", ">"
                                              , "*", "/", "+", "-"
                                              , "^", "=", "!", ":"
-                                             , "_", "$", "#", "~"
+                                             , "_", "$", "~"
                                              ]
                        , P.identStart = letter
                        } )
@@ -126,13 +126,15 @@ repeatCount = do
               return $ RepeatBetween firstNum endNum
 
 repeatOperator :: Parsed st (WebRexp -> WebRexp)
-repeatOperator = do
-    _ <- string "#{"
+repeatOperator = (do
+    whiteSpace
+    _ <-  string "#{"
     whiteSpace
     counts <- repeatCount
     whiteSpace
     _ <- char '}'
-    return $ Repeat counts
+    whiteSpace
+    return $ Repeat counts) <?> "#{repeat}"
 
 webident :: Parsed st String
 webident = many1 (alphaNum <|> char '-' <|> char '_')
@@ -176,9 +178,9 @@ actionList = (aexpr <$>
            aexpr b = ActionExprs b
 
 webrexp :: Parsed st WebRexp
-webrexp = do path <- exprPath
-             rest <- (recParser <|> return [])
-             return . aBrancher $ path : rest
+webrexp = (do path <- exprPath
+              rest <- (recParser <|> return [])
+              return . aBrancher $ path : rest) <?> "webrexp"
     where separator = (whiteSpace >> char ';' >> whiteSpace)
           aBrancher [a] = a
           aBrancher a = Branch a
