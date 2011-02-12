@@ -2,7 +2,7 @@
 -- It shouldn't be used directly.
 module Webrexp.Parser( webRexpParser ) where
 
-import Control.Applicative( (<$>), (<*), (<$) )
+import Control.Applicative( (<$>), (<*), (<$), (<*>) )
 import Control.Monad.Identity
 
 import Webrexp.Exprtypes
@@ -103,9 +103,9 @@ rangeParser = do
 
 webrexpOp :: Parsed st WebRexp
 webrexpOp =  spaceSurrounded ops
-    where ops =  (DiggLink <$ char '>')
-             <|> (PreviousSibling <$ char '^')
-             <|> (NextSibling <$ char '/')
+    where ops =  (DiggLink <$ string ">>")
+             <|> (PreviousSibling <$ char '~')
+             <|> (NextSibling <$ char '+')
              <|> (Parent <$ char '<')
              <|> (Unique (-1) <$ char '!')
              <?> "webrexpOp"
@@ -204,6 +204,7 @@ expterm = parens webrexp
        <|> braces (Action <$> actionList)
        <|> brackets rangeParser
        <|> webrexpOp
+       <|> (DirectChild <$ (char '>' >> whiteSpace) <*> webref)
        <|> (Str <$> stringLiteral)
        <|> (Ref <$> webref)
        <?> "expterm"

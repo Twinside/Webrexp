@@ -175,6 +175,9 @@ data WebRexp =
     | Range Int [NodeRange]
     -- | every tag/class name
     | Ref WebRef
+    -- | Find children who are the different descendent of
+    -- the current nodes.
+    | DirectChild WebRef
     -- | This constructor is an optimisation, it
     -- combine an Ref followed by an action, where
     -- every action is a predicate. Help pruning
