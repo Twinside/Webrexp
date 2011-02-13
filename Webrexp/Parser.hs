@@ -73,6 +73,15 @@ operatorDefs =
     , [binary "=" (BinOp OpEq)  AssocRight
       ,binary "!=" (BinOp OpNe) AssocLeft
       ,binary "=~" (BinOp OpMatch) AssocLeft
+      ,binary "~=" (BinOp OpContain) AssocLeft
+
+      -- CSS compatibility...
+      ,binary "~=" (BinOp OpContain) AssocLeft
+      ,binary "^=" (BinOp OpBegin) AssocLeft
+      ,binary "$=" (BinOp OpEnd) AssocLeft
+      ,binary "*=" (BinOp OpSubstring) AssocLeft
+      ,binary "|=" (BinOp OpHyphenBegin) AssocLeft
+
       ,binary "<" (BinOp OpLt)  AssocLeft
       ,binary ">"  (BinOp OpGt) AssocLeft
       ,binary "<=" (BinOp OpLe) AssocLeft

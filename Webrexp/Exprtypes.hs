@@ -107,6 +107,12 @@ data Op =
     | OpAnd -- ^ \'&\' ('&&' in Haksell)
     | OpOr  -- ^ \'|\' ('||' in Haskell)
     | OpMatch -- ^ \'=~\' regexp matching
+
+    | OpContain   -- ^ \'~=\' op contain, as the CSS3 operator.
+    | OpBegin     -- ^ \'^=\' op beginning, as the CSS3 operator.
+    | OpEnd       -- ^ \'$=\' op beginning, as the CSS3 operator.
+    | OpSubstring -- ^ \'^=\' op beginning, as the CSS3 operator.
+    | OpHyphenBegin -- ^ \'|=\' op beginning, as the CSS3 operator.
     deriving (Eq, Show)
 
 -- | Represent an action Each production
@@ -151,6 +157,8 @@ data RepeatCount =
 data WebRexp =
     -- | ( ... ; ... ; ... )
       Branch [WebRexp]
+    -- | ( ... , ... , ... )
+    | Unions [WebRexp]
     -- | ... ... (each action followed, no rollback)
     | List [WebRexp]
     -- | ... *
