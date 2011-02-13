@@ -25,8 +25,10 @@ import Data.List( sort, mapAccumR )
 
 -- | represent an element
 data WebRef =
+    -- | \'*\' Any subelement.
+      Wildcard
     -- | ... Search for a named element.
-      Elem String
+    | Elem String
     -- | ... . ...  Check the value of the \'class\' attribute
     | OfClass WebRef String
     -- | \@... Check for the presence of an attribute
@@ -284,6 +286,7 @@ setRangeIndices expr = foldWebRexp uniqueCounter 0 expr
 -- | Pretty printing for 'WebRef'. It's should be reparsable
 -- by the WebRexp parser.
 prettyShowWebRef :: WebRef -> String
+prettyShowWebRef Wildcard = "*"
 prettyShowWebRef (Elem s) = s
 prettyShowWebRef (OfClass r s) = prettyShowWebRef r ++ "." ++ s
 prettyShowWebRef (Attrib r s) = prettyShowWebRef r ++ "@" ++ s

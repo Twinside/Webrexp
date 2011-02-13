@@ -2,7 +2,7 @@
 -- It shouldn't be used directly.
 module Webrexp.Parser( webRexpParser ) where
 
-import Control.Applicative( (<$>), (<*), (<$), (<*>) )
+import Control.Applicative( (<$>), (<$), (<*>) )
 import Control.Monad.Identity
 
 import Webrexp.Exprtypes
@@ -35,10 +35,6 @@ stringLiteral = P.stringLiteral lexer
 parens :: ParsecT String u Identity a 
        -> ParsecT String u Identity a
 parens = P.parens lexer
-
-braces :: ParsecT String u Identity a 
-       -> ParsecT String u Identity a
-braces = P.braces lexer
 
 brackets :: ParsecT String u Identity a 
          -> ParsecT String u Identity a
@@ -97,9 +93,11 @@ noderange = do
 
 rangeParser :: Parsed st WebRexp
 rangeParser = do
-    Range (-1) . simplifyNodeRanges <$> 
-            sepBy noderange (whiteSpace >> char ',' >> whiteSpace)
-                            <* whiteSpace
+    string "#{" >> whiteSpace
+    vals <- sepBy noderange separator
+    whiteSpace
+    return . Range (-1) $ simplifyNodeRanges vals
+     where separator = whiteSpace >> char ',' >> whiteSpace
 
 webrexpOp :: Parsed st WebRexp
 webrexpOp =  spaceSurrounded ops
@@ -128,12 +126,9 @@ repeatCount = do
 repeatOperator :: Parsed st (WebRexp -> WebRexp)
 repeatOperator = (do
     whiteSpace
-    _ <-  string "#{"
-    whiteSpace
+    _ <-  char '{' >> whiteSpace
     counts <- repeatCount
-    whiteSpace
-    _ <- char '}'
-    whiteSpace
+    _ <- whiteSpace >> char '}' >> whiteSpace
     return $ Repeat counts) <?> "#{repeat}"
 
 webident :: Parsed st String
@@ -148,16 +143,13 @@ webrefop = (OfClass <$ char '.')
 
 webref :: Parsed st WebRef
 webref = do
-    initial <- Elem <$> webident
+    initial <- (Elem <$> webident) <|> (Wildcard <$ char '*')
     (do op <- webrefop
         next <- webident
         return $ op initial next) <|> return initial
 
-attribute :: Parsed st String
-attribute = char '@' >> webident
-
 actionTerm :: Parsed st ActionExpr
-actionTerm = (ARef <$> attribute)
+actionTerm = (ARef <$> webident)
           <|> parens actionExpr
           <|> (CstS <$> stringLiteral)
           <|> (CstI . fromIntegral <$> natural)
@@ -201,8 +193,8 @@ expr = buildExpressionParser webrexpCombinator (spaceSurrounded expterm)
 
 expterm :: Parsed st WebRexp
 expterm = parens webrexp
-       <|> braces (Action <$> actionList)
-       <|> brackets rangeParser
+       <|> brackets (Action <$> actionList)
+       <|> rangeParser
        <|> webrexpOp
        <|> (DirectChild <$ (char '>' >> whiteSpace) <*> webref)
        <|> (Str <$> stringLiteral)
