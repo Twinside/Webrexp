@@ -103,18 +103,17 @@ rangeParser :: Parsed st WebRexp
 rangeParser = do
     string "#{" >> whiteSpace
     vals <- sepBy noderange separator
-    whiteSpace
+    _ <- whiteSpace >> char '}'
     return . Range (-1) $ simplifyNodeRanges vals
      where separator = whiteSpace >> char ',' >> whiteSpace
 
 webrexpOp :: Parsed st WebRexp
-webrexpOp =  spaceSurrounded ops
-    where ops =  (DiggLink <$ string ">>")
-             <|> (PreviousSibling <$ char '~')
-             <|> (NextSibling <$ char '+')
-             <|> (Parent <$ char '<')
-             <|> (Unique (-1) <$ char '!')
-             <?> "webrexpOp"
+webrexpOp = (DiggLink <$ string ">>")
+         <|> (PreviousSibling <$ char '~')
+         <|> (NextSibling <$ char '+')
+         <|> (Parent <$ char '<')
+         <|> (Unique (-1) <$ char '!')
+         <?> "webrexpOp"
 
 repeatCount :: Parsed st RepeatCount
 repeatCount = do
@@ -209,8 +208,7 @@ expterm :: Parsed st WebRexp
 expterm = parens webrexp
        <|> brackets (Action <$> actionList)
        <|> rangeParser
-       <|> webrexpOp
-       <|> (DirectChild <$ (char '>' >> whiteSpace) <*> webref)
+       <|> (try (DirectChild <$ (char '>' >> whiteSpace) <*> webref) <|> webrexpOp)
        <|> (Str <$> stringLiteral)
        <|> (Ref <$> webref)
        <?> "expterm"

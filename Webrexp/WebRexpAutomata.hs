@@ -16,6 +16,7 @@ module Webrexp.WebRexpAutomata ( -- * Types
 
 import Control.Monad
 import Data.Array
+import qualified Data.Array.Unboxed as U
 import System.IO
 
 import Webrexp.Log
@@ -32,6 +33,8 @@ data AutomataAction =
     | Pop
     | AutoTrue
     | AutoSimple WebRexp
+    | Scatter (U.UArray Int Int)
+    | Gather (U.UArray Int Int)
     deriving (Show)
     
 
@@ -88,14 +91,31 @@ dumpAutomata label h auto = do
     hPutStrLn h $ "// begin:" ++ show (beginState auto)
                  ++ " count:" ++ show (nodeCount auto)
     hPutStrLn h "digraph debug {"
-    hPutStrLn h $ "    graph [root=\"i" ++ show (beginState auto) 
+    hPutStrLn h $ "    graph [fontname=\"Helvetica\", root=\"i" ++ show (beginState auto) 
                         ++ "\" label=\"" ++ concatMap subster label ++ "\"]"
     mapM_ printInfo . assocs $ autoStates auto
     hPutStrLn h "}"
-     where printInfo (idx, AutoState act t f) = do
+     where printInfo (idx, AutoState act@(Scatter arr) t f) = do
+               let idxs = "i" ++ show idx
+               hPutStrLn h $ idxs ++ " [label=\"" ++ show idx
+                            ++ " : Scatter\"," ++ shaper act ++ "];"
+               dumpLink idxs t f
+               dumpAllLinks idxs arr
+
+           printInfo (idx, AutoState act@(Gather arr) t f) = do
+               let idxs = "i" ++ show idx
+               hPutStrLn h $ idxs ++ " [label=\"" ++ show idx
+                            ++ " : Scatter\"," ++ shaper act ++ "];"
+               dumpLink idxs t f
+               dumpAllLinks idxs arr
+
+           printInfo (idx, AutoState act t f) = do
                let idxs = "i" ++ show idx
                hPutStrLn h $ idxs ++ " [label=\"" ++ show idx ++ " : " ++ cleanShow act 
                                   ++ "\"," ++ shaper act ++ "];"
+               dumpLink idxs t f
+
+           dumpLink idxs t f =
                if t == f && t >= 0
                	 then hPutStrLn h $ idxs ++ " -> i" ++ show t    
                	                    ++ "[label=\"t/f\"];"
@@ -111,10 +131,15 @@ dumpAutomata label h auto = do
            cleanShow (AutoSimple (Unique i)) = "!" ++ show i
            cleanShow (AutoSimple (Ref ref)) = "<" ++ prettyShowWebRef ref ++ ">"
            cleanShow (AutoSimple (Str str)) = "\\\"" ++ concatMap subster str ++ "\\\""
-           cleanShow (AutoSimple (Action _)) = "{ }"
+           cleanShow (AutoSimple (Action _)) = "[ ]"
            cleanShow (AutoSimple (ConstrainedRef ref _)) =
-               "<" ++ prettyShowWebRef ref ++ "> {}"
+               "<" ++ prettyShowWebRef ref ++ "> []"
            cleanShow a = concatMap subster $ show a
+
+           dumpAllLinks idx arr = mapM_ (\i -> do
+               hPutStrLn h $ idx ++ " -> i"
+                            ++ show i ++ "[style=\"dotted\"]"
+               ) . tail $ U.elems arr
 
            shaper (AutoSimple _) = ""
            shaper _ = "shape=\"box\", color=\"yellow\", style=\"filled\""
@@ -139,6 +164,24 @@ toAutomata :: WebRexp       -- ^ Expression to be transformed into an automata
            -- | The first unused, the index of the beggining state
            -- of the converted webrexp, and finaly the list of states.
            -> (FreeId, FirstState, StateListBuilder) 
+toAutomata (Unions lst) free (onTrue, onFalse) =
+  (contentFree, scatterId, ([scatterState, gatherState] ++) . states)
+    where scatterId = free
+          gatherId = free + 1
+
+          scatterState = (scatterId, AutoState (Scatter beginList) (head beginIndices) gatherId)
+          gatherState = (gatherId, AutoState (Gather beginList) onTrue onFalse)
+
+          beginList = U.listArray (0, length lst - 1) beginIndices
+
+          transformExprs expr (new, beginIds, st) =
+            let (freeId, first, newStates) =
+                        toAutomata expr new (gatherId, onFalse)
+            in (freeId, first : beginIds, newStates . st)
+
+          (contentFree, beginIndices, states) =
+              foldr transformExprs (gatherId + 1, [], id) lst
+
 toAutomata (List lst) free (onTrue, onFalse) =
   foldr transformExprs (free, onTrue, id) lst
     where transformExprs expr (new, toTrue, states) =
