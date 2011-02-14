@@ -59,7 +59,6 @@ lexer  = P.makeTokenParser
 webrexpCombinator :: OperatorTable String st Identity WebRexp
 webrexpCombinator =
     [ [ postfix "*" Star
-      , postfix "+" Plus
       , Postfix repeatOperator ]
     , [ binary "|" Alternative AssocLeft ]
     ]
@@ -152,7 +151,7 @@ webrefop = (OfClass <$ char '.')
 
 webref :: Parsed st WebRef
 webref = do
-    initial <- (Elem <$> webident) <|> (Wildcard <$ char '*')
+    initial <- (Elem <$> webident) <|> (Wildcard <$ char '_')
     (do op <- webrefop
         next <- webident
         return $ op initial next) <|> return initial
@@ -179,16 +178,22 @@ actionList = (aexpr <$>
            aexpr b = ActionExprs b
 
 webrexp :: Parsed st WebRexp
-webrexp = (do path <- exprPath
+webrexp = (do path <- exprUnion
               rest <- (recParser <|> return [])
               return . aBrancher $ path : rest) <?> "webrexp"
     where separator = (whiteSpace >> char ';' >> whiteSpace)
           aBrancher [a] = a
           aBrancher a = Branch a
           recParser = separator >>
-           ((do p <- exprPath 
+           ((do p <- exprUnion
                 (recParser >>= return . (p :)) <|> return [p]) <|> return [List []])
 
+
+exprUnion :: Parsed st WebRexp
+exprUnion = unioner <$> exprPath `sepBy1` separator
+    where separator = (whiteSpace >> char ',' >> whiteSpace)
+          unioner [a] = a
+          unioner a = Unions a
 
 exprPath :: Parsed st WebRexp
 exprPath = (list <$> many1 expr)

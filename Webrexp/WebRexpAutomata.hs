@@ -107,7 +107,7 @@ dumpAutomata label h auto = do
                         (hPutStrLn h $ idxs ++ " -> i"
                                    ++ show f ++ "[label=\"f\"];")
 
-           cleanShow (AutoSimple DiggLink) = ">"
+           cleanShow (AutoSimple DiggLink) = ">>"
            cleanShow (AutoSimple (Unique i)) = "!" ++ show i
            cleanShow (AutoSimple (Ref ref)) = "<" ++ prettyShowWebRef ref ++ ">"
            cleanShow (AutoSimple (Str str)) = "\\\"" ++ concatMap subster str ++ "\\\""
@@ -146,6 +146,8 @@ toAutomata (List lst) free (onTrue, onFalse) =
                     toAutomata expr new (toTrue, onFalse)
            in (freeId, first, newStates . states)
 
+toAutomata (Branch []) _ _ =
+    error "toAutomata - Empty Branch statement"
 toAutomata (Branch (x:lst)) free (onTrue, onFalse) =
   (lastFree, firstSink
   ,firstPush . finalStates . listStates)
@@ -170,9 +172,6 @@ toAutomata (Branch (x:lst)) free (onTrue, onFalse) =
 
           (lastFree, branchBegin, finalStates) =
               toAutomata x listFree (listBegin, lastFalseSink)
-
-toAutomata (Plus expr) free sinks =
-    toAutomata (List [expr, Star expr]) free sinks
 
 -- For repetition, we simply create a list replicated n times
 -- and convert it to an automata
@@ -207,7 +206,30 @@ toAutomata (Alternative a b) free (onTrue, onFalse) =
     where (bFree, bbeg, bStates) = toAutomata b free (onTrue, onFalse)
           (aFree, abeg, aStates) = toAutomata a bFree (onTrue, bbeg)
 
-toAutomata rest free (onTrue, onFalse) =
+-- Like other places in the software, we explicitely list all possibilites
+-- to let the compiler help us when refactoring/modifying the types by
+-- emitting a warning.
+toAutomata rest@(Unique _)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(Str _)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(Action _)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(Range _ _)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(Ref _)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(DirectChild _)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(ConstrainedRef _ _)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(DiggLink)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(NextSibling)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(PreviousSibling)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(Parent)  free (onTrue, onFalse) =
     (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
 
 --------------------------------------------------

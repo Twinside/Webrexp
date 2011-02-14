@@ -163,8 +163,6 @@ data WebRexp =
     | List [WebRexp]
     -- | ... *
     | Star WebRexp
-    -- | ... +
-    | Plus WebRexp
     -- | ... #{  }
     | Repeat RepeatCount WebRexp
     -- | \'|\' Represent two alternative path, if
@@ -217,7 +215,11 @@ data WebRexp =
 isOperatorBoolean :: Op -> Bool
 isOperatorBoolean op = elem op
     [ OpLt, OpLe, OpGt, OpGe, OpEq, OpNe
-    , OpAnd, OpOr, OpMatch ]
+    , OpAnd, OpOr, OpMatch
+    
+    -- All CSS 3 operators
+    , OpContain, OpBegin, OpEnd, OpSubstring
+    , OpHyphenBegin ]
 
 -- | Tell if an action is a predicate and is only
 -- used to filter nodes. Expression can be modified
@@ -230,15 +232,32 @@ isActionPredicate _ = False
 -- | This function permit the rewriting of a wabrexp in a depth-first
 -- fashion while carying out an accumulator.
 foldWebRexp :: (a -> WebRexp -> (a, WebRexp)) -> a -> WebRexp -> (a, WebRexp)
+foldWebRexp f acc (Repeat count sub) = f acc' $ Repeat count sub'
+    where (acc', sub') = foldWebRexp f acc sub
+foldWebRexp f acc (Alternative a b) = f acc'' $ Alternative a' b'
+    where (acc', a') = foldWebRexp f acc a
+          (acc'', b') = foldWebRexp f acc' b
+foldWebRexp f acc (Unions subs) = f acc' $ Unions subs'
+    where (acc', subs') = mapAccumR (foldWebRexp f) acc subs
 foldWebRexp f acc (Branch subs) = f acc' $ Branch subs'
     where (acc', subs') = mapAccumR (foldWebRexp f) acc subs
 foldWebRexp f acc (List subs) = f acc' $ List subs'
     where (acc', subs') = mapAccumR (foldWebRexp f) acc subs
 foldWebRexp f acc (Star sub) = f acc' $ Star sub'
     where (acc', sub') = foldWebRexp f acc sub
-foldWebRexp f acc (Plus sub) = f acc' $ Plus sub'
-    where (acc', sub') = foldWebRexp f acc sub
-foldWebRexp f acc e = f acc e
+-- This part is exaustive to let the compiler emit a warning if
+-- we modify the definition of the WebRexp type
+foldWebRexp f acc e@(ConstrainedRef _ _) = f acc e
+foldWebRexp f acc e@(DirectChild _) = f acc e
+foldWebRexp f acc e@(Unique _) = f acc e
+foldWebRexp f acc e@(Str _) = f acc e
+foldWebRexp f acc e@(Action _) = f acc e
+foldWebRexp f acc e@(Range _ _) = f acc e
+foldWebRexp f acc e@(Ref _) = f acc e
+foldWebRexp f acc e@(DiggLink) = f acc e
+foldWebRexp f acc e@(NextSibling) = f acc e
+foldWebRexp f acc e@(PreviousSibling) = f acc e
+foldWebRexp f acc e@(Parent) = f acc e
 
 -- | Preparation function for webrexp, assign all indices
 -- used for evaluation as an automata.
@@ -294,7 +313,7 @@ setRangeIndices expr = foldWebRexp uniqueCounter 0 expr
 -- | Pretty printing for 'WebRef'. It's should be reparsable
 -- by the WebRexp parser.
 prettyShowWebRef :: WebRef -> String
-prettyShowWebRef Wildcard = "*"
+prettyShowWebRef Wildcard = "_"
 prettyShowWebRef (Elem s) = s
 prettyShowWebRef (OfClass r s) = prettyShowWebRef r ++ "." ++ s
 prettyShowWebRef (Attrib r s) = prettyShowWebRef r ++ "@" ++ s

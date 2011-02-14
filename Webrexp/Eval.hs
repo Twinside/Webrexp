@@ -8,6 +8,7 @@ module Webrexp.Eval
 import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class
+import Data.List
 import Text.Regex.PCRE
 
 import Webrexp.GraphWalker
@@ -22,6 +23,12 @@ import qualified Data.ByteString.Lazy as B
 searchRefIn :: (GraphWalker node rezPath)
             => WebRef -> NodeContext node rezPath
             -> [NodeContext node rezPath]
+searchRefIn Wildcard n =
+    [ NodeContext {
+        parents = subP ++ parents n,
+        this = sub,
+        rootRef = rootRef n
+    }  | (sub, subP) <- descendants $ this n]
 searchRefIn (Elem s) n =
     [ NodeContext {
         parents = subP ++ parents n,
@@ -74,9 +81,9 @@ evalWebRexpFor (ConstrainedRef s action) e = do
     if not valid
       then return ref
       else do
-      	lst'  <- mapM (evalWebRexpFor $ Action action) lst
-      	return (any fst lst', concat $ map snd lst')
-      	  
+          lst'  <- mapM (evalWebRexpFor $ Action action) lst
+          return (any fst lst', concat $ map snd lst')
+            
 
 evalWebRexpFor (Ref ref) (Node n) = do
     debugLog $ "> 'ref' : " ++ show ref
@@ -109,9 +116,24 @@ evalWebRexpFor Parent (Node e) = do
       (n,_):ps -> return (True, [Node $ e { parents = ps, this = n }])
 evalWebRexpFor Parent _ = return (False, [])
 
-evalWebRexpFor _ _ =
-    error "evalWebRexpFor - non terminal in terminal function."
-
+-- Exaustive definition to get better warning from compiler in case
+-- of modification
+evalWebRexpFor (Branch _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
+evalWebRexpFor (Unions _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
+evalWebRexpFor (List _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
+evalWebRexpFor (Star _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
+evalWebRexpFor (Repeat _ _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
+evalWebRexpFor (Alternative _ _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
+evalWebRexpFor (Range _ _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
+evalWebRexpFor (DirectChild _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
 
 
 downLinks :: (GraphWalker node rezPath)
@@ -125,8 +147,8 @@ downLinks path = do
          DataBlob u b -> return [Blob $ BinBlob u b]
          Result u n -> return [Node $
                     NodeContext { parents = []
-         	                    , rootRef = u
-         	                    , this = n }]
+                                 , rootRef = u
+                                 , this = n }]
 
 --------------------------------------------------
 ----            Helper functions
@@ -302,4 +324,18 @@ evalAction (BinOp OpNe a b) e = binArith (\a' b' -> valNot $ binComp a' b') e a 
 
 evalAction (BinOp OpAnd a b) e = binArith (boolComp (&&)) e a b
 evalAction (BinOp OpOr  a b) e = binArith (boolComp (||)) e a b
+
+evalAction (BinOp OpContain a b) e =
+    binArith (stringPredicate contain) e a b
+        where contain att val = val `elem` words att
+evalAction (BinOp OpHyphenBegin a b) e = 
+    binArith (stringPredicate contain) e a b
+      where contain att val = val == (fst $ break ('-' ==) att)
+evalAction (BinOp OpBegin a b) e =
+    binArith (stringPredicate $ flip isPrefixOf) e a b
+evalAction (BinOp OpEnd a b) e =
+    binArith (stringPredicate $ flip isSuffixOf) e a b
+evalAction (BinOp OpSubstring a b) e =
+    binArith (stringPredicate $ flip isInfixOf) e a b
+
 
