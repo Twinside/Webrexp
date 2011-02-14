@@ -105,7 +105,7 @@ dumpAutomata label h auto = do
            printInfo (idx, AutoState act@(Gather arr) t f) = do
                let idxs = "i" ++ show idx
                hPutStrLn h $ idxs ++ " [label=\"" ++ show idx
-                            ++ " : Scatter\"," ++ shaper act ++ "];"
+                            ++ " : Gather\"," ++ shaper act ++ "];"
                dumpLink idxs t f
                dumpAllLinks idxs arr
 
@@ -176,7 +176,7 @@ toAutomata (Unions lst) free (onTrue, onFalse) =
 
           transformExprs expr (new, beginIds, st) =
             let (freeId, first, newStates) =
-                        toAutomata expr new (gatherId, onFalse)
+                        toAutomata expr new (gatherId, gatherId)
             in (freeId, first : beginIds, newStates . st)
 
           (contentFree, beginIndices, states) =
@@ -319,6 +319,13 @@ evalStateDFS :: (GraphWalker node rezPath)
                   -> Bool           -- ^ If we are coming from a True link or a False one
                   -> EvalState node rezPath -- ^ Currently evaluated element
                   -> WebCrawler node rezPath Bool
+evalStateDFS a (AutoState (Gather _) onTrue onFalse) valid e =
+    evalAutomataDFS a (if valid then onTrue else onFalse) valid e
+
+evalStateDFS a (AutoState (Scatter idxs) onTrue _) _ e = do
+    mapM_ (recordNode . (,) e) . reverse $ U.elems idxs
+    evalAutomataDFS a onTrue True e
+
 evalStateDFS a (AutoState Push onTrue _) _ e = do
     debugLog "> Push"
     pushToBranchContext (e, 1, 0)
