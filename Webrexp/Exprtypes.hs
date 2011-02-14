@@ -192,15 +192,15 @@ data WebRexp =
     -- quickly the evaluation tree in DFS evaluation.
     | ConstrainedRef WebRef ActionExpr
 
-    -- | \'>\' operator in the language, used
+    -- | \'>>\' operator in the language, used
     -- to follow hyper link
     | DiggLink
 
-    -- | \'/\' operator in the language, used
+    -- | \'+\' operator in the language, used
     -- to select the next sibling node.
     | NextSibling
 
-    -- | \'^\' operator in the language, used
+    -- | \'~\' operator in the language, used
     -- to select the previous sibling node.
     | PreviousSibling
 
