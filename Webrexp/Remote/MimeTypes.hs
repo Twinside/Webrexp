@@ -1,14 +1,29 @@
 -- | This module implement helper functions to determine if
 -- downloaded URI can be parsed as HTML/XML. Everything
--- is based on MIME-TYPE.
-module Webrexp.Remote.MimeTypes ( ContentType
+-- is based on MIME-TYPE, or file extension for local content.
+module Webrexp.Remote.MimeTypes ( -- * Types
+                                  ContentType
+                                , ParseableType(..)
+                                  -- * Functions
                                 , isParseable
-                                , addContentTypeExtension 
+                                , getParseKind
+                                , addContentTypeExtension
                                 ) where
 
 import System.FilePath
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+
+-- | Describe different kind of content parser usable
+data ParseableType =
+      -- | Indicate a parser which must be tolerant enough
+      -- to parse HTML
+      ParseableHTML
+      -- | You can go ahead and use a rather strict parser.
+    | ParseableXML
+      -- | Do what you want with it for now.
+    | ParseableJson
+    deriving Eq
 
 -- | Type alias to ease documentation.
 type ContentType = String
@@ -27,6 +42,22 @@ isParseable :: ContentType -> Bool
 isParseable s = Set.member (findContentTypeOf s)
                             parseableMimeTypes
              
+
+fileExtension :: Map.Map String ParseableType
+fileExtension = Map.fromList
+    [ (".html" , ParseableHTML)
+    , (".htm"  , ParseableHTML)
+    , (".xhtml", ParseableHTML)
+    , (".xml"  ,  ParseableXML)
+    , (".json" , ParseableJson)
+    ]
+
+-- | Given a file name, return a ParseableType, explaining
+-- the kind of parser to use on the given content.
+getParseKind :: FilePath -> Maybe ParseableType
+getParseKind f = case Map.lookup (takeExtension f) fileExtension of
+        Nothing -> Nothing
+        Just s  -> Just s
 
 -- | Mime Types who can be parsed.
 parseableMimeTypes :: Set.Set ContentType

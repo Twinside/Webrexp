@@ -21,11 +21,11 @@ import System.Exit
 import Webrexp.Exprtypes
 import Webrexp.Parser( webRexpParser )
 import Webrexp.HxtNode
+import Webrexp.HaXmlNode
 import Webrexp.ResourcePath
 import Webrexp.WebContext
 
 import Webrexp.WebRexpAutomata
-
 
 data Conf = Conf
     { hammeringDelay :: Int
