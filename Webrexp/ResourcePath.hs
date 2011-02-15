@@ -53,7 +53,7 @@ toRezPath s = case (parseURI s, isValid s, isRelativeReference s) of
 -- | Resource path combiner, similar to </> in use,
 -- but also handle URI.
 combinePath :: ResourcePath -> ResourcePath -> ResourcePath
-combinePath (Local a) (Local b) = Local $ (dropFileName a) </> b
+combinePath (Local a) (Local b) = Local $ dropFileName a </> b
 combinePath (Remote a) (Remote b) =
     case b `relativeTo` a of
          -- TODO : find another way for this
@@ -75,7 +75,7 @@ extractFileName (Local c) = snd $ splitFileName c
 dumpResourcePath :: (Monad m, MonadIO m)
                  => Loggers -> ResourcePath -> m ()
 dumpResourcePath _ src@(Local source) = do
-    cwd <- liftIO $ getCurrentDirectory
+    cwd <- liftIO getCurrentDirectory
     liftIO . copyFile source $ cwd </> extractFileName src
 
 dumpResourcePath loggers@(logger,_,_) p@(Remote a) = do
@@ -94,7 +94,7 @@ dumpResourcePath loggers@(logger,_,_) p@(Remote a) = do
 -- it's binary representation, and it's real place if any.
 downloadBinary :: (Monad m, MonadIO m)
                => Loggers -> URI -> m (URI, Response B.ByteString)
-downloadBinary (_, errLog, verbose) url = do
+downloadBinary (_, errLog, verbose) url =
     liftIO . browse $ do
         setAllowRedirects True
         setErrHandler errLog

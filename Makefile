@@ -1,7 +1,15 @@
+ifeq ($(shell uname),WindowsNT)
+
+HADDOCKPATH		:=${APPDATA}/cabal/bin/haddock
+
+else
+
+HADDOCKPATH		:=${HOME}/.cabal/bin/haddock
+
+endif
 
 build:
 	runhaskell Setup.hs build
-	# cp dist/build/Webrexp/Webrexp.exe webrexp.exe
 
 conf:
 	runhaskell Setup.hs --user configure
@@ -13,8 +21,11 @@ run:
 	cd debug; ./debug.sh 2>&1 | tee out.txt; cd ..
 
 doc:
-	runhaskell Setup.hs haddock --with-haddock=${HOME}/.cabal/bin/haddock
+	runhaskell Setup.hs haddock --with-haddock=${HADDOCKPATH}
 
 opendoc:
 	open dist/doc/html/Webrexp/webrexp/index.html
+
+lint:
+	hlint Webrexp webrexpMain.hs webrexp.hs
 

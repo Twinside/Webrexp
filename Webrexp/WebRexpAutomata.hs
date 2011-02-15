@@ -96,21 +96,21 @@ dumpAutomata label h auto = do
     mapM_ printInfo . assocs $ autoStates auto
     hPutStrLn h "}"
      where printInfo (idx, AutoState act@(Scatter arr) t f) = do
-               let idxs = "i" ++ show idx
+               let idxs = 'i' : show idx
                hPutStrLn h $ idxs ++ " [label=\"" ++ show idx
                             ++ " : Scatter\"," ++ shaper act ++ "];"
                dumpLink idxs t f
                dumpAllLinks idxs arr
 
            printInfo (idx, AutoState act@(Gather arr) t f) = do
-               let idxs = "i" ++ show idx
+               let idxs = 'i' : show idx
                hPutStrLn h $ idxs ++ " [label=\"" ++ show idx
                             ++ " : Gather\"," ++ shaper act ++ "];"
                dumpLink idxs t f
                dumpAllLinks idxs arr
 
            printInfo (idx, AutoState act t f) = do
-               let idxs = "i" ++ show idx
+               let idxs = 'i' : show idx
                hPutStrLn h $ idxs ++ " [label=\"" ++ show idx ++ " : " ++ cleanShow act 
                                   ++ "\"," ++ shaper act ++ "];"
                dumpLink idxs t f
@@ -128,7 +128,7 @@ dumpAutomata label h auto = do
                                    ++ show f ++ "[label=\"f\"];")
 
            cleanShow (AutoSimple DiggLink) = ">>"
-           cleanShow (AutoSimple (Unique i)) = "!" ++ show i
+           cleanShow (AutoSimple (Unique i)) = '!' : show i
            cleanShow (AutoSimple (Ref ref)) = "<" ++ prettyShowWebRef ref ++ ">"
            cleanShow (AutoSimple (Str str)) = "\\\"" ++ concatMap subster str ++ "\\\""
            cleanShow (AutoSimple (Action _)) = "[ ]"
@@ -136,7 +136,7 @@ dumpAutomata label h auto = do
                "<" ++ prettyShowWebRef ref ++ "> []"
            cleanShow a = concatMap subster $ show a
 
-           dumpAllLinks idx arr = mapM_ (\i -> do
+           dumpAllLinks idx arr = mapM_ (\i ->
                hPutStrLn h $ idx ++ " -> i"
                             ++ show i ++ "[style=\"dotted\"]"
                ) . tail $ U.elems arr
@@ -266,13 +266,13 @@ toAutomata rest@(DirectChild _)  free (onTrue, onFalse) =
     (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
 toAutomata rest@(ConstrainedRef _ _)  free (onTrue, onFalse) =
     (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
-toAutomata rest@(DiggLink)  free (onTrue, onFalse) =
+toAutomata rest@DiggLink  free (onTrue, onFalse) =
     (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
-toAutomata rest@(NextSibling)  free (onTrue, onFalse) =
+toAutomata rest@NextSibling  free (onTrue, onFalse) =
     (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
-toAutomata rest@(PreviousSibling)  free (onTrue, onFalse) =
+toAutomata rest@PreviousSibling  free (onTrue, onFalse) =
     (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
-toAutomata rest@(Parent)  free (onTrue, onFalse) =
+toAutomata rest@Parent  free (onTrue, onFalse) =
     (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
 
 --------------------------------------------------
@@ -322,9 +322,12 @@ evalStateDFS :: (GraphWalker node rezPath)
 evalStateDFS a (AutoState (Gather _) onTrue onFalse) valid e =
     evalAutomataDFS a (if valid then onTrue else onFalse) valid e
 
-evalStateDFS a (AutoState (Scatter idxs) onTrue _) _ e = do
+evalStateDFS a (AutoState (Scatter idxs) onTrue _) True e = do
     mapM_ (recordNode . (,) e) . reverse $ U.elems idxs
     evalAutomataDFS a onTrue True e
+
+evalStateDFS a (AutoState (Scatter _) _ onFalse) False e =
+    evalAutomataDFS a onFalse False e
 
 evalStateDFS a (AutoState Push onTrue _) _ e = do
     debugLog "> Push"
@@ -370,7 +373,7 @@ evalStateDFS a (AutoState (AutoSimple (Range bucket ranges))
                                 onTrue onFalse) _ e = do
     count <- incrementGetRangeCounter bucket
     debugLog $ show ranges ++ " - [" ++ show bucket ++  "]" ++ show count ++ "  :"
-                ++ (show $ count `isInNodeRange` ranges)
+                ++ show (count `isInNodeRange` ranges)
     if count `isInNodeRange` ranges
        then evalAutomataDFS a onTrue True e
        else evalAutomataDFS a onFalse False e
@@ -420,6 +423,29 @@ evalStateBFS :: (GraphWalker node rezPath)
              -> Bool           -- ^ If we are coming from a True link or a False one
              -> [EvalState node rezPath]   -- ^ Currently evaluated elements
              -> WebCrawler node rezPath Bool
+
+evalStateBFS a (AutoState (Gather idxs) onTrue onFalse) valid e = do
+    (st, idx) <- popAccumulation
+    let (_, maxId) = U.bounds idxs
+        toConcat = if valid then e else []
+    if idx <= maxId
+       then do
+           accumulateCurrentState (st ++ toConcat, idx + 1)
+           evalAutomataBFS a (idxs U.! idx) True st
+
+       else do
+       	   let finalSt = st ++ toConcat
+       	       finalValid = not $ null finalSt
+       	   evalAutomataBFS a (if finalValid then onTrue else onFalse)
+       	                     finalValid finalSt
+
+evalStateBFS a (AutoState (Scatter _) onTrue _) True e = do
+    accumulateCurrentState (e, 0)
+    evalAutomataBFS a onTrue True e
+
+evalStateBFS a (AutoState (Scatter _) _ onFalse) False e =
+    evalAutomataBFS a onFalse False e
+
 evalStateBFS a (AutoState Push onTrue _) True e = do
     debugLog "> Push"
     pushCurrentState e
