@@ -68,7 +68,7 @@ evalWebRexpFor (Str str) _ = do
     return (True, [Text str])
 
 evalWebRexpFor (Action action) e = do
-    debugLog "> '{...}'"
+    debugLog "> '[...]'"
     (rez, neoNode) <- evalAction action $ Just e
     dumpActionVal rez
     if isActionResultValid rez
@@ -116,18 +116,18 @@ evalWebRexpFor (Ref ref) (Node n) = do
 evalWebRexpFor (Ref _) _ = return (False, [])
 
 evalWebRexpFor DiggLink e = do
-    debugLog "> '>'"
+    debugLog "> '>>'"
     e' <- diggLinks e
     return (not $ null e', e')
 
 evalWebRexpFor NextSibling e = do
-  debugLog "> '/'"
+  debugLog "> '+'"
   case siblingAccessor 1 e of
     Nothing -> return (False, [])
     Just e' -> return (True, [e'])
 
 evalWebRexpFor PreviousSibling e = do
-  debugLog "> '^'"
+  debugLog "> '~'"
   case siblingAccessor (-1) e of
     Nothing -> return (False, [])
     Just e' -> return (True, [e'])

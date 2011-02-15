@@ -430,25 +430,32 @@ evalStateBFS :: (GraphWalker node rezPath)
              -> WebCrawler node rezPath Bool
 
 evalStateBFS a (AutoState (Gather idxs) onTrue onFalse) valid e = do
+    debugLog $ "> Gather"
     (st, idx) <- popAccumulation
+    (beginSt, _) <- popAccumulation
     let (_, maxId) = U.bounds idxs
         toConcat = if valid then e else []
     if idx <= maxId
        then do
+           accumulateCurrentState (beginSt, 0)
            accumulateCurrentState (st ++ toConcat, idx + 1)
-           evalAutomataBFS a (idxs U.! idx) True st
+           evalAutomataBFS a (idxs U.! idx) True beginSt
 
        else do
        	   let finalSt = st ++ toConcat
        	       finalValid = not $ null finalSt
+       	   debugLog $ "    > gathered " ++ show (length finalSt)
        	   evalAutomataBFS a (if finalValid then onTrue else onFalse)
        	                     finalValid finalSt
 
 evalStateBFS a (AutoState (Scatter _) onTrue _) True e = do
+    debugLog $ "> Scatter"
     accumulateCurrentState (e, 0)
+    accumulateCurrentState ([], 0)
     evalAutomataBFS a onTrue True e
 
-evalStateBFS a (AutoState (Scatter _) _ onFalse) False e =
+evalStateBFS a (AutoState (Scatter _) _ onFalse) False e = do
+    debugLog $ "> Scatter FALSE"
     evalAutomataBFS a onFalse False e
 
 evalStateBFS a (AutoState Push onTrue _) True e = do
