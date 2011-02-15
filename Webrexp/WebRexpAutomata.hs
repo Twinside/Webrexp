@@ -139,7 +139,7 @@ dumpAutomata label h auto = do
            dumpAllLinks idx arr = mapM_ (\i ->
                hPutStrLn h $ idx ++ " -> i"
                             ++ show i ++ "[style=\"dotted\"]"
-               ) . tail $ U.elems arr
+               ) $ U.elems arr
 
            shaper (AutoSimple _) = ""
            shaper _ = "shape=\"box\", color=\"yellow\", style=\"filled\""
@@ -172,7 +172,7 @@ toAutomata (Unions lst) free (onTrue, onFalse) =
           scatterState = (scatterId, AutoState (Scatter beginList) (head beginIndices) gatherId)
           gatherState = (gatherId, AutoState (Gather beginList) onTrue onFalse)
 
-          beginList = U.listArray (0, length lst - 1) beginIndices
+          beginList = U.listArray (0, length lst - 2) $ tail beginIndices
 
           transformExprs expr (new, beginIds, st) =
             let (freeId, first, newStates) =
@@ -319,14 +319,19 @@ evalStateDFS :: (GraphWalker node rezPath)
                   -> Bool           -- ^ If we are coming from a True link or a False one
                   -> EvalState node rezPath -- ^ Currently evaluated element
                   -> WebCrawler node rezPath Bool
-evalStateDFS a (AutoState (Gather _) onTrue onFalse) valid e =
+evalStateDFS a (AutoState (Gather _) onTrue onFalse) valid e = do
+    debugLog $ "> Gather"
     evalAutomataDFS a (if valid then onTrue else onFalse) valid e
 
 evalStateDFS a (AutoState (Scatter idxs) onTrue _) True e = do
-    mapM_ (recordNode . (,) e) . reverse $ U.elems idxs
+    debugLog $ "> Scattering " ++ show (U.bounds idxs)
+    mapM_ (\idx -> do debugLog $ "  > Scatter " ++ show idx
+                      recordNode (e, idx)) . reverse $ U.elems idxs
+    addToBranchContext (1 + snd (U.bounds idxs)) 0
     evalAutomataDFS a onTrue True e
 
-evalStateDFS a (AutoState (Scatter _) _ onFalse) False e =
+evalStateDFS a (AutoState (Scatter _) _ onFalse) False e = do
+    debugLog "> Scatter FALSE"
     evalAutomataDFS a onFalse False e
 
 evalStateDFS a (AutoState Push onTrue _) _ e = do

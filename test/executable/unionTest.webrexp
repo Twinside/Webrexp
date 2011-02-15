@@ -1,0 +1,12 @@
+"dfsLocalTest.html" >> (div h1, div p) [. ; "\n"]
+
+-- in DFS
+-- local1.html
+-- local2.html
+-- local3.html
+-- First page
+-- Second page
+-- Third page
+-- 4th thing
+-- 5th thing
+
