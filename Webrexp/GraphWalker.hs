@@ -76,7 +76,7 @@ data AccessResult a rezPath =
 -- the logic should use this interface.
 --
 -- Minimal implementation : everything.
-class (Show a, GraphPath rezPath)
+class (GraphPath rezPath)
         => GraphWalker a rezPath | a -> rezPath where
     -- | Get back an attribute of the node
     -- if it exists

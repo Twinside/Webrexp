@@ -21,9 +21,6 @@ import Webrexp.Remote.MimeTypes
 
 type HaXmLNode = Content Posn
 
-instance Show HaXmLNode where
-    show _ = "[Opaque node]"
-
 instance GraphWalker HaXmLNode ResourcePath where
     accessGraph = loadHtml
 
