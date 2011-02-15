@@ -21,7 +21,7 @@ main = do
       putStrLn "-------------------------------------"
       putStrLn $ "URL=" ++ show u
       putStrLn "-------------------------------------"
-      putStrLn $ show rsp
+      print rsp
       putStrLn "-------------------------------------"
       print $ parseHtmlContent $ rspBody rsp
 

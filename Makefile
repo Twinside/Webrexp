@@ -27,5 +27,5 @@ opendoc:
 	open dist/doc/html/Webrexp/webrexp/index.html
 
 lint:
-	hlint Webrexp webrexpMain.hs webrexp.hs
+	hlint .
 
