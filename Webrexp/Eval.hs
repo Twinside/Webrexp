@@ -258,8 +258,6 @@ binComp _ _ = ATypeError
 
 boolComp :: (Bool -> Bool -> Bool) -> ActionValue -> ActionValue -> ActionValue
 boolComp f (ABool a) (ABool b) = ABool $ f a b
-boolComp f a         (AInt b) = boolComp f a (ABool $ b /= 0)
-boolComp f (AInt a)         b = boolComp f (ABool $ a /= 0) b
 boolComp _ _                _ = ABool False
 
 isActionResultValid :: ActionValue -> Bool
