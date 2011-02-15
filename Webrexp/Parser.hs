@@ -118,13 +118,13 @@ webrexpOp = (DiggLink <$ string ">>")
 repeatCount :: Parsed st RepeatCount
 repeatCount = do
     begin <- fromInteger <$> natural
-    parseComma begin <|> (return $ RepeatTimes begin)
+    parseComma begin <|> return (RepeatTimes begin)
      where parseComma firstNum = do
              whiteSpace
              _ <- char ','
              whiteSpace
-             parseLastNumber firstNum <|> (return $ 
-                                        RepeatAtLeast firstNum) 
+             parseLastNumber firstNum <|> return
+                                        (RepeatAtLeast firstNum) 
                 
            parseLastNumber firstNum = do
               endNum <- fromInteger <$> natural
@@ -180,17 +180,17 @@ webrexp :: Parsed st WebRexp
 webrexp = (do path <- exprUnion
               rest <- (recParser <|> return [])
               return . aBrancher $ path : rest) <?> "webrexp"
-    where separator = (whiteSpace >> char ';' >> whiteSpace)
+    where separator = whiteSpace >> char ';' >> whiteSpace
           aBrancher [a] = a
           aBrancher a = Branch a
           recParser = separator >>
            ((do p <- exprUnion
-                (recParser >>= return . (p :)) <|> return [p]) <|> return [List []])
+                ((p:) <$> recParser) <|> return [p]) <|> return [List []])
 
 
 exprUnion :: Parsed st WebRexp
 exprUnion = unioner <$> exprPath `sepBy1` separator
-    where separator = (whiteSpace >> char ',' >> whiteSpace)
+    where separator = whiteSpace >> char ',' >> whiteSpace
           unioner [a] = a
           unioner a = Unions a
 

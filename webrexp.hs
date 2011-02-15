@@ -24,9 +24,6 @@ import Webrexp.HxtNode
 import Webrexp.ResourcePath
 import Webrexp.WebContext
 
--- we need the instance
-import Webrexp.HxtNode ()
-
 import Webrexp.WebRexpAutomata
 
 
@@ -89,7 +86,7 @@ evalWebRexpWithEvaluator evaluator str =
   case runParser webRexpParser () "expr" str of
     Left err -> do
         putStrLn "Parsing error :\n"
-        putStrLn $ show err
+        print err
         return False
 
     Right wexpr ->
@@ -101,7 +98,7 @@ evalWebRexpWithConf conf =
   case runParser webRexpParser () "expr" (expr conf) of
     Left err -> do
         putStrLn "Parsing error :\n"
-        putStrLn $ show err
+        print err
         return False
 
     Right wexpr -> do
@@ -121,8 +118,9 @@ evalWebRexpWithConf conf =
               	 else evalBreadthFirst wexpr
 
         rez <- evalWithEmptyContext crawled
-        if output conf /= stdout
-           then hClose $ output conf
-           else return ()
+
+        when (output conf /= stdout)
+             (hClose $ output conf)
+
         return rez
 

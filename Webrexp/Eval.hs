@@ -72,7 +72,7 @@ evalWebRexpFor (Unique bucket) e = do
            visited (Blob b) = checkUnique . show $ sourcePath b
            checkUnique s = do
                seen <- hasResourceBeenVisited bucket s
-               when (not seen)
+               unless seen
                     (setResourceVisited bucket s)
                return $ not seen
 
@@ -82,7 +82,7 @@ evalWebRexpFor (ConstrainedRef s action) e = do
       then return ref
       else do
           lst'  <- mapM (evalWebRexpFor $ Action action) lst
-          return (any fst lst', concat $ map snd lst')
+          return (any fst lst', concatMap snd lst')
             
 
 evalWebRexpFor (Ref ref) (Node n) = do
@@ -145,7 +145,7 @@ downLinks path = do
     case down of
          AccessError -> return []
          DataBlob u b -> return [Blob $ BinBlob u b]
-         Result u n -> return [Node $
+         Result u n -> return [Node 
                     NodeContext { parents = []
                                  , rootRef = u
                                  , this = n }]
@@ -156,7 +156,7 @@ downLinks path = do
 diggLinks :: (GraphWalker node rezPath)
           => EvalState node rezPath
           -> WebCrawler node rezPath [EvalState node rezPath]
-diggLinks (Node n) = do
+diggLinks (Node n) =
     concat <$> sequence
             [ downLinks $ rootRef n <//> indir
                                 | indir <- indirectLinks $ this n ]
@@ -169,7 +169,7 @@ diggLinks _ = return []
 siblingAccessor :: (GraphWalker node rezPath)
                 => Int -> EvalState node rezPath
                 -> Maybe (EvalState node rezPath)
-siblingAccessor 0   node@(Node _) = Just $ node
+siblingAccessor 0   node@(Node _) = Just node
 siblingAccessor idx (Node node)=
     case parents node of
       [] -> Nothing
@@ -239,7 +239,7 @@ boolComp :: (Bool -> Bool -> Bool) -> ActionValue -> ActionValue -> ActionValue
 boolComp f (ABool a) (ABool b) = ABool $ f a b
 boolComp f a         (AInt b) = boolComp f a (ABool $ b /= 0)
 boolComp f (AInt a)         b = boolComp f (ABool $ a /= 0) b
-boolComp _ _                _ = ABool $ False
+boolComp _ _                _ = ABool False
 
 isActionResultValid :: ActionValue -> Bool
 isActionResultValid (ABool False) = False
@@ -261,7 +261,7 @@ dumpContent e@(Just (Node ns)) =
     links -> do
         loggers <- prepareLogger
         mapM_ (\l -> dumpDataAtPath loggers $
-                            (rootRef ns) <//> l) links
+                            rootRef ns <//> l) links
         return (ABool True, e)
 dumpContent e@(Just (Text str)) = return (AString str, e)
 dumpContent e@(Just (Blob b)) = do
@@ -297,10 +297,10 @@ evalAction (CstS s) n = return (AString s, n)
 evalAction OutputAction e =
     dumpContent e
 
-evalAction (ARef r) e@(Just (Node n)) = do
+evalAction (ARef r) e@(Just (Node n)) =
     case attribOf r (this n) of
       Nothing -> return (ABool False, e)
-      Just s -> return $ (AString s, e)
+      Just s -> return (AString s, e)
 
 evalAction (ARef _) _ =
     return (ATypeError, Nothing)
@@ -330,7 +330,7 @@ evalAction (BinOp OpContain a b) e =
         where contain att val = val `elem` words att
 evalAction (BinOp OpHyphenBegin a b) e = 
     binArith (stringPredicate contain) e a b
-      where contain att val = val == (fst $ break ('-' ==) att)
+      where contain att val = val == fst (break ('-' ==) att)
 evalAction (BinOp OpBegin a b) e =
     binArith (stringPredicate $ flip isPrefixOf) e a b
 evalAction (BinOp OpEnd a b) e =

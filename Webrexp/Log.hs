@@ -18,7 +18,7 @@ import Webrexp.WebContext
 debugLog :: String -> WebCrawler node rezPath ()
 debugLog str = do
     verb <- isVerbose
-    when (verb) (liftIO $ putStrLn str)
+    when verb (liftIO $ putStrLn str)
 
 
 -- | If a webrexp output some text, it must go through

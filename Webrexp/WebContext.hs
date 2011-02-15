@@ -65,6 +65,7 @@ module Webrexp.WebContext
 
 import System.IO
 import Control.Applicative
+import Control.Arrow( first )
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
@@ -170,7 +171,7 @@ newtype (Monad m) => WebContextT node rezPath m a =
 instance (Functor m, Monad m) => Functor (WebContextT node rezPath m) where
     {-# INLINE fmap #-}
     fmap f a = WebContextT $ \c ->
-        fmap (\(a', c') -> (f a', c')) $ runWebContextT a c
+        fmap (first f) $ runWebContextT a c
 
 instance (Functor m, Monad m) => Applicative (WebContextT node rezPath m) where
     pure = return

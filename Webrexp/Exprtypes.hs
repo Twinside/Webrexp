@@ -213,7 +213,7 @@ data WebRexp =
 -- operation. Useful to tell if an action is a
 -- predicate. See 'isActionPredicate'
 isOperatorBoolean :: Op -> Bool
-isOperatorBoolean op = elem op
+isOperatorBoolean op = op `elem`
     [ OpLt, OpLe, OpGt, OpGe, OpEq, OpNe
     , OpAnd, OpOr, OpMatch
     
@@ -254,10 +254,10 @@ foldWebRexp f acc e@(Str _) = f acc e
 foldWebRexp f acc e@(Action _) = f acc e
 foldWebRexp f acc e@(Range _ _) = f acc e
 foldWebRexp f acc e@(Ref _) = f acc e
-foldWebRexp f acc e@(DiggLink) = f acc e
-foldWebRexp f acc e@(NextSibling) = f acc e
-foldWebRexp f acc e@(PreviousSibling) = f acc e
-foldWebRexp f acc e@(Parent) = f acc e
+foldWebRexp f acc e@DiggLink = f acc e
+foldWebRexp f acc e@NextSibling = f acc e
+foldWebRexp f acc e@PreviousSibling = f acc e
+foldWebRexp f acc e@Parent = f acc e
 
 -- | Preparation function for webrexp, assign all indices
 -- used for evaluation as an automata.
