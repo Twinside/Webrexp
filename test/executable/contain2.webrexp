@@ -1,0 +1,7 @@
+["do re mi fa sol la si do" ~= "la";"ok\n"]
+    ( ["do re mi fa sol la si do" ~= "du"; "bad\n"]
+    | ["ok\n"] )
+
+    ( ["do re mi fa sol la si do" ~= 3; "bad\n"]
+    | ["ok\n"] )
+

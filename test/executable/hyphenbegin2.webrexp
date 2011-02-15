@@ -1,0 +1,6 @@
+["dore-mifaso-llasido" |= "dore"; "ok\n"]
+    ( ["dore-mifaso-llasido" |= "mifaso"; "bad\n"]
+    | ["ok\n"] )
+
+    ( ["doremifasollasido" |= 4; "bad\n"]
+    | ["ok\n"] )

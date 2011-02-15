@@ -38,6 +38,25 @@ function autoTest(  )
     }
 }
 
+function testBad(  )
+{
+   ls mustfail/*.webrexp | % {
+        $file = $_
+        $rez = ../../dist/build/Webrexp/webrexp -q -f $file.fullname
+
+        if ( $LastExitCode -eq 0 )
+        {
+            echo "======================================"
+            echo "Failed wrong $($_.name)"
+            echo "======================================"
+            cat $file
+        }
+        else
+        {
+            echo "."
+        }
+   }
+}
 function testFile( $f )
 {
     echo "======================================"
@@ -53,5 +72,9 @@ if ( $args.length -gt 0 )
 {
     testFile $args[0]
 }
-else { autoTest } 
+else
+{
+    autoTest
+    testBad
+} 
 

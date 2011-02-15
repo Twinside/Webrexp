@@ -1,0 +1,6 @@
+["doremifasollasido" ^= "doremi"; "ok\n"]
+    ( ["doremifasollasido" ^= "dorema"; "bad\n"]
+    | ["ok\n"] )
+
+    ( ["doremifasollasido" ^= 4; "bad\n"]
+    | ["ok\n"] )

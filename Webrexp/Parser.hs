@@ -156,11 +156,11 @@ webref = do
         return $ op initial next) <|> return initial
 
 actionTerm :: Parsed st ActionExpr
-actionTerm = (ARef <$> webident)
+actionTerm = (CstI . fromIntegral <$> natural)
           <|> parens actionExpr
           <|> (CstS <$> stringLiteral)
-          <|> (CstI . fromIntegral <$> natural)
           <|> (OutputAction <$ char '.')
+          <|> (ARef <$> webident)
           <?> "actionTerm"
 
 actionExpr :: Parsed st ActionExpr

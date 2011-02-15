@@ -69,7 +69,7 @@ evalWebRexpFor (Str str) _ = do
     return (True, [Text str])
 
 evalWebRexpFor (Action action) e = do
-    debugLog "> '[...]'"
+    debugLog $ "> '[...]'"
     (rez, neoNode) <- evalAction action $ Just e
     dumpActionVal rez
     if isActionResultValid rez
@@ -270,6 +270,7 @@ isActionResultValid _ = True
 
 dumpActionVal :: ActionValue -> WebCrawler node rezPath ()
 dumpActionVal (AString s) = textOutput s
+dumpActionVal (AInt i) = textOutput $ show i
 dumpActionVal _ = return ()
 
 dumpContent :: (GraphWalker node rezPath)
@@ -300,7 +301,9 @@ evalAction :: (GraphWalker node rezPath)
                         (ActionValue, Maybe (EvalState node rezPath))
 evalAction (ActionExprs actions) e = foldM eval (ABool True, e) actions
     where eval v@(ABool False, _) _ = return v
+          eval v@(ATypeError, _) _ = return v
           eval (actionVal, el) act = do
+              debugLog $ "\t>" ++ show actionVal
               dumpActionVal actionVal
               evalAction act el
 

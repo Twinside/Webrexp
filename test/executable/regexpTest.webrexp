@@ -1,0 +1,3 @@
+["abcdefghijk" =~ "cd..gh[wi]" ;"ok\n"]
+    (["abcdefghijk" =~ "cd..gh[wi]w" ; "bad\n"] | ["ok\n"])
+    (["abcdefghijk" =~ 4 ; "bad\n"] | ["ok\n"])
