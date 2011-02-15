@@ -9,11 +9,11 @@ Using
 For tutorial and examples, please see the project's [wiki](https://github.com/Twinside/Webrexp/wiki/Webrexp). 
 As a teasing, here is some samples for a tiny command line for listing a RSS stream's title :
 
-    webrexp '"http://someurl.com" > item title {.}'
+    webrexp '"http://someurl.com" >> item title [.]'
 
 And another one to dump all the images from a webpage
 
-    webrexp '"http://someurl.com" > img {.}'
+    webrexp '"http://someurl.com" >> img [.]'
 
 Building
 --------
