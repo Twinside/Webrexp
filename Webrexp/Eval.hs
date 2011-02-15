@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Webrexp.Eval
     (
     -- * Functions
@@ -21,26 +22,39 @@ import qualified Data.ByteString.Lazy as B
 -- | Given a node search for valid children, check for their
 -- validity against the requirement.
 searchRefIn :: (GraphWalker node rezPath)
-            => WebRef -> NodeContext node rezPath
-            -> [NodeContext node rezPath]
-searchRefIn Wildcard n =
+            => Bool                         -- ^ Do we recurse?
+            -> WebRef                       -- ^ Ref to find
+            -> NodeContext node rezPath     -- ^ The root nood for the search
+            -> [NodeContext node rezPath]   -- ^ The found nodes.
+searchRefIn False Wildcard n =
+    [ NodeContext {
+        parents = (this n, idx) : parents n,
+        this = sub,
+        rootRef = rootRef n
+     }  | (sub, idx) <- zip (childrenOf $ this n) [0..]]
+
+searchRefIn True Wildcard n =
     [ NodeContext {
         parents = subP ++ parents n,
         this = sub,
         rootRef = rootRef n
     }  | (sub, subP) <- descendants $ this n]
-searchRefIn (Elem s) n =
+
+searchRefIn True (Elem s) n =
     [ NodeContext {
         parents = subP ++ parents n,
         this = sub,
         rootRef = rootRef n
     }  | (sub, subP) <- findNamed s $ this n]
-searchRefIn (OfClass r s) n =
-    [v | v <- searchRefIn r n, attribOf "class" (this v) == Just s]
-searchRefIn (Attrib  r s) n =
-    [v | v <- searchRefIn r n, attribOf s (this v) /= Nothing]
-searchRefIn (OfName  r s) n =
-    [v | v <- searchRefIn r n, attribOf "id" (this v) == Just s]
+
+searchRefIn False (Elem s) n =
+    [v | v <- searchRefIn False Wildcard n, nameOf (this v) == Just s]
+searchRefIn recurse (OfClass r s) n =
+    [v | v <- searchRefIn recurse r n, attribOf "class" (this v) == Just s]
+searchRefIn recurse (Attrib  r s) n =
+    [v | v <- searchRefIn recurse r n, attribOf s (this v) /= Nothing]
+searchRefIn recurse (OfName  r s) n =
+    [v | v <- searchRefIn recurse r n, attribOf "id" (this v) == Just s]
 
 
 -- | Evaluate the leaf nodes of a webrexp, this way the code
@@ -85,11 +99,20 @@ evalWebRexpFor (ConstrainedRef s action) e = do
           return (any fst lst', concatMap snd lst')
             
 
-evalWebRexpFor (Ref ref) (Node n) = do
-    debugLog $ "> 'ref' : " ++ show ref
-    let n' = map Node $ searchRefIn ref n
+evalWebRexpFor (DirectChild ref) (Node n) = do
+    debugLog $ "> direct 'ref' : " ++ show ref
+    let n' = map Node $ searchRefIn False ref n
     debugLog $ ">>> found ->" ++ show (length n')
     return (not $ null n', n')
+
+evalWebRexpFor (DirectChild _) _ = return (False, [])
+
+evalWebRexpFor (Ref ref) (Node n) = do
+    debugLog $ "> 'ref' : " ++ show ref
+    let n' = map Node $ searchRefIn True ref n
+    debugLog $ ">>> found ->" ++ show (length n')
+    return (not $ null n', n')
+
 evalWebRexpFor (Ref _) _ = return (False, [])
 
 evalWebRexpFor DiggLink e = do
@@ -132,9 +155,6 @@ evalWebRexpFor (Alternative _ _) _ =
      error "evalWebRexpFor - non terminal in terminal function."
 evalWebRexpFor (Range _ _) _ =
      error "evalWebRexpFor - non terminal in terminal function."
-evalWebRexpFor (DirectChild _) _ =
-     error "evalWebRexpFor - non terminal in terminal function."
-
 
 downLinks :: (GraphWalker node rezPath)
           => rezPath
