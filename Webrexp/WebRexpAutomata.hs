@@ -320,7 +320,7 @@ evalStateDFS :: (GraphWalker node rezPath)
                   -> EvalState node rezPath -- ^ Currently evaluated element
                   -> WebCrawler node rezPath Bool
 evalStateDFS a (AutoState (Gather _) onTrue onFalse) valid e = do
-    debugLog $ "> Gather"
+    debugLog "> Gather"
     evalAutomataDFS a (if valid then onTrue else onFalse) valid e
 
 evalStateDFS a (AutoState (Scatter idxs) onTrue _) True e = do
@@ -430,7 +430,7 @@ evalStateBFS :: (GraphWalker node rezPath)
              -> WebCrawler node rezPath Bool
 
 evalStateBFS a (AutoState (Gather idxs) onTrue onFalse) valid e = do
-    debugLog $ "> Gather"
+    debugLog "> Gather"
     (st, idx) <- popAccumulation
     (beginSt, _) <- popAccumulation
     let (_, maxId) = U.bounds idxs
@@ -449,13 +449,13 @@ evalStateBFS a (AutoState (Gather idxs) onTrue onFalse) valid e = do
        	                     finalValid finalSt
 
 evalStateBFS a (AutoState (Scatter _) onTrue _) True e = do
-    debugLog $ "> Scatter"
+    debugLog "> Scatter"
     accumulateCurrentState (e, 0)
     accumulateCurrentState ([], 0)
     evalAutomataBFS a onTrue True e
 
 evalStateBFS a (AutoState (Scatter _) _ onFalse) False e = do
-    debugLog $ "> Scatter FALSE"
+    debugLog "> Scatter FALSE"
     evalAutomataBFS a onFalse False e
 
 evalStateBFS a (AutoState Push onTrue _) True e = do

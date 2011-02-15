@@ -49,7 +49,7 @@ instance GraphWalker HaXmLNode ResourcePath where
 
 parserOfKind :: Maybe ParseableType
              -> ResourcePath
-             -> (B.ByteString -> AccessResult HaXmLNode ResourcePath)
+             -> B.ByteString -> AccessResult HaXmLNode ResourcePath
 parserOfKind Nothing datapath = DataBlob datapath
 parserOfKind (Just ParseableHTML) datapath = \file ->
     let (Document _prolog _ e _) = htmlParse "" $ B.unpack file
