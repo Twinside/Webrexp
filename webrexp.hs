@@ -20,7 +20,6 @@ import System.Exit
 
 import Webrexp.Exprtypes
 import Webrexp.Parser( webRexpParser )
-import Webrexp.HxtNode
 import Webrexp.HaXmlNode
 import Webrexp.ResourcePath
 import Webrexp.WebContext
@@ -52,7 +51,7 @@ defaultConf = Conf
     , depthEvaluation = True
     }
 
-type Crawled a = WebCrawler HxtNode ResourcePath a
+type Crawled a = WebCrawler HaXmLNode ResourcePath a
 
 -- | Prepare a webrexp.
 -- This function is useful if the expression has

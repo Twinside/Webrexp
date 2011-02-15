@@ -19,7 +19,6 @@ import Webrexp.WebContext
 import Webrexp.Log
 import qualified Data.ByteString.Lazy as B
 
-import Debug.Trace
 -- | Given a node search for valid children, check for their
 -- validity against the requirement.
 searchRefIn :: (GraphWalker node rezPath)
@@ -27,7 +26,7 @@ searchRefIn :: (GraphWalker node rezPath)
             -> WebRef                       -- ^ Ref to find
             -> NodeContext node rezPath     -- ^ The root nood for the search
             -> [NodeContext node rezPath]   -- ^ The found nodes.
-searchRefIn False Wildcard n = (\a -> trace ("Meeeeh\n" ++ show (map this a)) a)
+searchRefIn False Wildcard n =
     [ NodeContext {
         parents = (this n, idx) : parents n,
         this = sub,
