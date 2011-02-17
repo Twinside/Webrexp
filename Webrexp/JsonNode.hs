@@ -15,8 +15,19 @@ import qualified Webrexp.ProjectByteString as B
 
 import Webrexp.GraphWalker
 import Webrexp.ResourcePath
+import Webrexp.UnionNode
+import Webrexp.Remote.MimeTypes
 
 type JsonNode = (Maybe String, JSValue)
+
+instance PartialGraph JsonNode ResourcePath where
+    dummyElem = undefined
+
+    isResourceParseable _ ParseableJson = True
+    isResourceParseable _ _ = False
+
+    parseResource ParseableJson binData = (,) Nothing <$> readJSON binData
+    parseResource _ _ = error "Wrong kind of parser used"
 
 instance GraphWalker JsonNode ResourcePath where
     accessGraph = loadJson
