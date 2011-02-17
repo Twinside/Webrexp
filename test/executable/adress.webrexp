@@ -1,0 +1,4 @@
+"adress.json" >>
+    ( address city [.; "\n"]
+    ; number [.; "\n"] )
+
