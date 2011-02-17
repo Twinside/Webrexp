@@ -54,7 +54,8 @@ defaultConf = Conf
     , depthEvaluation = True
     }
 
-type Crawled a = WebCrawler HaXmLNode ResourcePath a
+type Crawled a = WebCrawler (UnionNode HaXmLNode JsonNode)
+                            ResourcePath a
 
 -- | Prepare a webrexp.
 -- This function is useful if the expression has

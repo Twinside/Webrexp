@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
--- Here lies dragons.
+-- Here be dragons.
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | This module has for aim to create new node type by combining
@@ -38,6 +38,24 @@ class (GraphWalker a rezPath) => PartialGraph a rezPath where
 -- | Data type which is an instance of graphwalker.
 -- Use it to combine two other node types.
 data UnionNode a b = UnionLeft a | UnionRight b
+
+-- | Allow recursion of union node, so a tree of multidomain
+-- node can be built.
+instance ( PartialGraph a rezPath
+         , PartialGraph b rezPath
+         , GraphWalker (UnionNode a b) rezPath)
+      => PartialGraph (UnionNode a b) rezPath where
+    dummyElem = undefined
+
+    isResourceParseable _ parser =
+        isResourceParseable (dummyElem :: a) parser ||
+            isResourceParseable (dummyElem :: b) parser
+
+    parseResource parser binData =
+        case ( isResourceParseable (dummyElem :: a) parser
+             , isResourceParseable (dummyElem :: b) parser) of
+            (True, _) -> UnionLeft <$> parseResource parser binData
+            (_   , _) -> UnionRight <$> parseResource parser binData
 
 instance (PartialGraph a ResourcePath, PartialGraph b ResourcePath)
         => GraphWalker (UnionNode a b) ResourcePath where
