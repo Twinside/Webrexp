@@ -73,7 +73,7 @@ import Data.Functor.Identity
 import Data.Array.IO
 import qualified Data.Set as Set
 
-import qualified Data.ByteString.Lazy as B
+import qualified Webrexp.ProjectByteString as B
 import Webrexp.GraphWalker
 
 -- | Typical use of the WebContextT monad transformer

@@ -16,7 +16,7 @@ import Network.Browser
 import Network.URI
 import System.Directory
 import System.FilePath
-import qualified Data.ByteString.Lazy as B
+import qualified Webrexp.ProjectByteString as B
 
 import Webrexp.Remote.MimeTypes
 

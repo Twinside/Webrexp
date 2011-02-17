@@ -13,7 +13,7 @@ import Text.XML.HaXml.Parse
 import Text.XML.HaXml.Html.Parse
 import System.Directory
 
-import qualified Data.ByteString.Lazy.Char8 as B
+import qualified Webrexp.ProjectByteString as B
 
 import Webrexp.GraphWalker
 import Webrexp.ResourcePath

@@ -21,7 +21,7 @@ module Webrexp.GraphWalker
     ) where
 
 import Control.Monad.IO.Class
-import qualified Data.ByteString.Lazy as B
+import qualified Webrexp.ProjectByteString as B
 
 -- | Represent the path used to find the node
 -- from the starting point of the graph.

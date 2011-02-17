@@ -21,6 +21,9 @@ import System.Exit
 import Webrexp.Exprtypes
 import Webrexp.Parser( webRexpParser )
 import Webrexp.HaXmlNode
+import Webrexp.JsonNode
+import Webrexp.UnionNode
+
 import Webrexp.ResourcePath
 import Webrexp.WebContext
 

@@ -17,7 +17,7 @@ import Webrexp.Exprtypes
 import Webrexp.WebContext
 
 import Webrexp.Log
-import qualified Data.ByteString.Lazy as B
+import qualified Webrexp.ProjectByteString as B
 
 -- | Given a node search for valid children, check for their
 -- validity against the requirement.
