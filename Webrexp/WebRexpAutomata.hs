@@ -16,6 +16,7 @@ module Webrexp.WebRexpAutomata ( -- * Types
 
 import Control.Monad
 import Data.Array
+import qualified Data.Array.Unboxed as U
 import System.IO
 
 import Webrexp.Log
@@ -32,6 +33,8 @@ data AutomataAction =
     | Pop
     | AutoTrue
     | AutoSimple WebRexp
+    | Scatter (U.UArray Int Int)
+    | Gather (U.UArray Int Int)
     deriving (Show)
     
 
@@ -88,14 +91,31 @@ dumpAutomata label h auto = do
     hPutStrLn h $ "// begin:" ++ show (beginState auto)
                  ++ " count:" ++ show (nodeCount auto)
     hPutStrLn h "digraph debug {"
-    hPutStrLn h $ "    graph [root=\"i" ++ show (beginState auto) 
+    hPutStrLn h $ "    graph [fontname=\"Helvetica\", root=\"i" ++ show (beginState auto) 
                         ++ "\" label=\"" ++ concatMap subster label ++ "\"]"
     mapM_ printInfo . assocs $ autoStates auto
     hPutStrLn h "}"
-     where printInfo (idx, AutoState act t f) = do
-               let idxs = "i" ++ show idx
+     where printInfo (idx, AutoState act@(Scatter arr) t f) = do
+               let idxs = 'i' : show idx
+               hPutStrLn h $ idxs ++ " [label=\"" ++ show idx
+                            ++ " : Scatter\"," ++ shaper act ++ "];"
+               dumpLink idxs t f
+               dumpAllLinks idxs arr
+
+           printInfo (idx, AutoState act@(Gather arr) t f) = do
+               let idxs = 'i' : show idx
+               hPutStrLn h $ idxs ++ " [label=\"" ++ show idx
+                            ++ " : Gather\"," ++ shaper act ++ "];"
+               dumpLink idxs t f
+               dumpAllLinks idxs arr
+
+           printInfo (idx, AutoState act t f) = do
+               let idxs = 'i' : show idx
                hPutStrLn h $ idxs ++ " [label=\"" ++ show idx ++ " : " ++ cleanShow act 
                                   ++ "\"," ++ shaper act ++ "];"
+               dumpLink idxs t f
+
+           dumpLink idxs t f =
                if t == f && t >= 0
                	 then hPutStrLn h $ idxs ++ " -> i" ++ show t    
                	                    ++ "[label=\"t/f\"];"
@@ -107,14 +127,19 @@ dumpAutomata label h auto = do
                         (hPutStrLn h $ idxs ++ " -> i"
                                    ++ show f ++ "[label=\"f\"];")
 
-           cleanShow (AutoSimple DiggLink) = ">"
-           cleanShow (AutoSimple (Unique i)) = "!" ++ show i
+           cleanShow (AutoSimple DiggLink) = ">>"
+           cleanShow (AutoSimple (Unique i)) = '!' : show i
            cleanShow (AutoSimple (Ref ref)) = "<" ++ prettyShowWebRef ref ++ ">"
            cleanShow (AutoSimple (Str str)) = "\\\"" ++ concatMap subster str ++ "\\\""
-           cleanShow (AutoSimple (Action _)) = "{ }"
+           cleanShow (AutoSimple (Action _)) = "[ ]"
            cleanShow (AutoSimple (ConstrainedRef ref _)) =
-               "<" ++ prettyShowWebRef ref ++ "> {}"
+               "<" ++ prettyShowWebRef ref ++ "> []"
            cleanShow a = concatMap subster $ show a
+
+           dumpAllLinks idx arr = mapM_ (\i ->
+               hPutStrLn h $ idx ++ " -> i"
+                            ++ show i ++ "[style=\"dotted\"]"
+               ) $ U.elems arr
 
            shaper (AutoSimple _) = ""
            shaper _ = "shape=\"box\", color=\"yellow\", style=\"filled\""
@@ -139,6 +164,24 @@ toAutomata :: WebRexp       -- ^ Expression to be transformed into an automata
            -- | The first unused, the index of the beggining state
            -- of the converted webrexp, and finaly the list of states.
            -> (FreeId, FirstState, StateListBuilder) 
+toAutomata (Unions lst) free (onTrue, onFalse) =
+  (contentFree, scatterId, ([scatterState, gatherState] ++) . states)
+    where scatterId = free
+          gatherId = free + 1
+
+          scatterState = (scatterId, AutoState (Scatter beginList) (head beginIndices) gatherId)
+          gatherState = (gatherId, AutoState (Gather beginList) onTrue onFalse)
+
+          beginList = U.listArray (0, length lst - 2) $ tail beginIndices
+
+          transformExprs expr (new, beginIds, st) =
+            let (freeId, first, newStates) =
+                        toAutomata expr new (gatherId, gatherId)
+            in (freeId, first : beginIds, newStates . st)
+
+          (contentFree, beginIndices, states) =
+              foldr transformExprs (gatherId + 1, [], id) lst
+
 toAutomata (List lst) free (onTrue, onFalse) =
   foldr transformExprs (free, onTrue, id) lst
     where transformExprs expr (new, toTrue, states) =
@@ -146,6 +189,8 @@ toAutomata (List lst) free (onTrue, onFalse) =
                     toAutomata expr new (toTrue, onFalse)
            in (freeId, first, newStates . states)
 
+toAutomata (Branch []) _ _ =
+    error "toAutomata - Empty Branch statement"
 toAutomata (Branch (x:lst)) free (onTrue, onFalse) =
   (lastFree, firstSink
   ,firstPush . finalStates . listStates)
@@ -170,9 +215,6 @@ toAutomata (Branch (x:lst)) free (onTrue, onFalse) =
 
           (lastFree, branchBegin, finalStates) =
               toAutomata x listFree (listBegin, lastFalseSink)
-
-toAutomata (Plus expr) free sinks =
-    toAutomata (List [expr, Star expr]) free sinks
 
 -- For repetition, we simply create a list replicated n times
 -- and convert it to an automata
@@ -207,7 +249,30 @@ toAutomata (Alternative a b) free (onTrue, onFalse) =
     where (bFree, bbeg, bStates) = toAutomata b free (onTrue, onFalse)
           (aFree, abeg, aStates) = toAutomata a bFree (onTrue, bbeg)
 
-toAutomata rest free (onTrue, onFalse) =
+-- Like other places in the software, we explicitely list all possibilites
+-- to let the compiler help us when refactoring/modifying the types by
+-- emitting a warning.
+toAutomata rest@(Unique _)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(Str _)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(Action _)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(Range _ _)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(Ref _)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(DirectChild _)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@(ConstrainedRef _ _)  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@DiggLink  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@NextSibling  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@PreviousSibling  free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@Parent  free (onTrue, onFalse) =
     (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
 
 --------------------------------------------------
@@ -254,6 +319,21 @@ evalStateDFS :: (GraphWalker node rezPath)
                   -> Bool           -- ^ If we are coming from a True link or a False one
                   -> EvalState node rezPath -- ^ Currently evaluated element
                   -> WebCrawler node rezPath Bool
+evalStateDFS a (AutoState (Gather _) onTrue onFalse) valid e = do
+    debugLog "> Gather"
+    evalAutomataDFS a (if valid then onTrue else onFalse) valid e
+
+evalStateDFS a (AutoState (Scatter idxs) onTrue _) True e = do
+    debugLog $ "> Scattering " ++ show (U.bounds idxs)
+    mapM_ (\idx -> do debugLog $ "  > Scatter " ++ show idx
+                      recordNode (e, idx)) . reverse $ U.elems idxs
+    addToBranchContext (1 + snd (U.bounds idxs)) 0
+    evalAutomataDFS a onTrue True e
+
+evalStateDFS a (AutoState (Scatter _) _ onFalse) False e = do
+    debugLog "> Scatter FALSE"
+    evalAutomataDFS a onFalse False e
+
 evalStateDFS a (AutoState Push onTrue _) _ e = do
     debugLog "> Push"
     pushToBranchContext (e, 1, 0)
@@ -298,7 +378,7 @@ evalStateDFS a (AutoState (AutoSimple (Range bucket ranges))
                                 onTrue onFalse) _ e = do
     count <- incrementGetRangeCounter bucket
     debugLog $ show ranges ++ " - [" ++ show bucket ++  "]" ++ show count ++ "  :"
-                ++ (show $ count `isInNodeRange` ranges)
+                ++ show (count `isInNodeRange` ranges)
     if count `isInNodeRange` ranges
        then evalAutomataDFS a onTrue True e
        else evalAutomataDFS a onFalse False e
@@ -348,6 +428,36 @@ evalStateBFS :: (GraphWalker node rezPath)
              -> Bool           -- ^ If we are coming from a True link or a False one
              -> [EvalState node rezPath]   -- ^ Currently evaluated elements
              -> WebCrawler node rezPath Bool
+
+evalStateBFS a (AutoState (Gather idxs) onTrue onFalse) valid e = do
+    debugLog "> Gather"
+    (st, idx) <- popAccumulation
+    (beginSt, _) <- popAccumulation
+    let (_, maxId) = U.bounds idxs
+        toConcat = if valid then e else []
+    if idx <= maxId
+       then do
+           accumulateCurrentState (beginSt, 0)
+           accumulateCurrentState (st ++ toConcat, idx + 1)
+           evalAutomataBFS a (idxs U.! idx) True beginSt
+
+       else do
+       	   let finalSt = st ++ toConcat
+       	       finalValid = not $ null finalSt
+       	   debugLog $ "    > gathered " ++ show (length finalSt)
+       	   evalAutomataBFS a (if finalValid then onTrue else onFalse)
+       	                     finalValid finalSt
+
+evalStateBFS a (AutoState (Scatter _) onTrue _) True e = do
+    debugLog "> Scatter"
+    accumulateCurrentState (e, 0)
+    accumulateCurrentState ([], 0)
+    evalAutomataBFS a onTrue True e
+
+evalStateBFS a (AutoState (Scatter _) _ onFalse) False e = do
+    debugLog "> Scatter FALSE"
+    evalAutomataBFS a onFalse False e
+
 evalStateBFS a (AutoState Push onTrue _) True e = do
     debugLog "> Push"
     pushCurrentState e

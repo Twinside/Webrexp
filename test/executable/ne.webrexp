@@ -1,0 +1,4 @@
+[3 != 4; "ok\n"]
+([3 != 3; "bad\n"] | ["ok\n"])
+["ralum" != "bitocu"; "ok\n"]
+(["ralum" != "ralum"; "bad\n"] | ["ok\n"])

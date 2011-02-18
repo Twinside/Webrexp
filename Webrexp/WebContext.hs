@@ -13,6 +13,13 @@ module Webrexp.WebContext
     , BinBlob (..)
     , Context
 
+    -- * Aliases
+    -- Only used to provide more meaningful type signatures
+    , Counter
+    , SeenCounter
+    , ValidSeenCounter
+    , StateNumber
+
     -- * Crawling configuration
     , LogLevel (..)
     , setLogLevel 
@@ -41,6 +48,9 @@ module Webrexp.WebContext
     , popLastRecord 
 
     -- ** Branch context
+    , accumulateCurrentState 
+    , popAccumulation 
+
     , pushToBranchContext 
     , popBranchContext 
     , addToBranchContext 
@@ -55,6 +65,7 @@ module Webrexp.WebContext
 
 import System.IO
 import Control.Applicative
+import Control.Arrow( first )
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
@@ -62,7 +73,7 @@ import Data.Functor.Identity
 import Data.Array.IO
 import qualified Data.Set as Set
 
-import qualified Data.ByteString.Lazy as B
+import qualified Webrexp.ProjectByteString as B
 import Webrexp.GraphWalker
 
 -- | Typical use of the WebContextT monad transformer
@@ -110,25 +121,38 @@ data LogLevel = Quiet -- ^ Only display the dumped information
               | Verbose -- ^ Display many debugging information
               deriving (Eq)
 
+-- | An int used as a counter
+type Counter = Int
+
+-- | Number of elements seen at a state in the automata.
+type SeenCounter = Int
+
+-- | Number of elements which arrived by a true transition
+-- to a state in the automata.
+type ValidSeenCounter = Int
+
+-- | Just an index to a state in the automata.
+type StateNumber = Int
+
 -- | Internal data context.
 data Context node rezPath = Context
     { -- | Context stack used in breadth-first evaluation
-      contextStack :: [[EvalState node rezPath]]
+      contextStack :: [([EvalState node rezPath], Counter)]
 
       -- | State waiting to be executed in a depth-
       -- first execution.
-    , waitingStates :: [(EvalState node rezPath, Int)]
+    , waitingStates :: [(EvalState node rezPath, StateNumber)]
 
       -- | State used to implement branches in the depth
       -- first evaluator.
-    , branchContext :: [(EvalState node rezPath, Int, Int)]
+    , branchContext :: [(EvalState node rezPath, SeenCounter, ValidSeenCounter)]
 
       -- | Buckets used for uniqueness pruning, all
       -- evaluation kind.
     , uniqueBucket :: IOArray Int (Set.Set String) 
 
       -- | Counters used for range evaluation in DFS
-    , countBucket :: IOUArray Int Int
+    , countBucket :: IOUArray Int Counter
 
       -- | Current log level
     , logLevel :: LogLevel
@@ -147,7 +171,7 @@ newtype (Monad m) => WebContextT node rezPath m a =
 instance (Functor m, Monad m) => Functor (WebContextT node rezPath m) where
     {-# INLINE fmap #-}
     fmap f a = WebContextT $ \c ->
-        fmap (\(a', c') -> (f a', c')) $ runWebContextT a c
+        fmap (first f) $ runWebContextT a c
 
 instance (Functor m, Monad m) => Applicative (WebContextT node rezPath m) where
     pure = return
@@ -234,6 +258,21 @@ isVerbose :: (Monad m) => WebContextT node rezPath m Bool
 isVerbose = WebContextT $ \c -> 
     return (logLevel c == Verbose, c)
 
+-- | TODO : write documentation
+accumulateCurrentState :: (Monad m)
+                       => ([EvalState node rezPath], StateNumber)
+                       -> WebContextT node rezPath m ()
+accumulateCurrentState lst = WebContextT $ \c ->
+        return ((), c{ contextStack = lst : contextStack c })
+
+-- | TODO : write documentation
+popAccumulation :: (Monad m)
+                => WebContextT node rezPath m ([EvalState node rezPath], StateNumber)
+popAccumulation = WebContextT $ \c ->
+    case contextStack c of
+         []     -> error "Empty context stack, implementation bug"
+         (x:xs) -> return (x, c{ contextStack = xs })
+
 -- | Internally the monad store a stack of state : the list
 -- of currently evaluated 'EvalState'. Pushing this context
 -- with store all the current nodes in it, waiting for later
@@ -242,7 +281,7 @@ pushCurrentState :: (Monad m)
                  => [EvalState node rezPath]
                  -> WebContextT node rezPath m ()
 pushCurrentState lst = WebContextT $ \c ->
-        return ((), c{ contextStack = lst : contextStack c })
+        return ((), c{ contextStack = (lst, 0) : contextStack c })
 
 -- | Inverse operation of 'pushCurrentState', retrieve
 -- stored nodes.
@@ -251,7 +290,7 @@ popCurrentState :: (Monad m)
 popCurrentState = WebContextT $ \c ->
     case contextStack c of
          []     -> error "Empty context stack, implementation bug"
-         (x:xs) -> 
+         ((x,_):xs) -> 
             return (x, c{ contextStack = xs })
 
 -- | Helper function used to start the evaluation of a webrexp
@@ -266,9 +305,9 @@ evalWithEmptyContext val = do
 prepareLogger :: (Monad m)
               => WebContextT node rezPath m (Logger, Logger, Logger)
 prepareLogger = WebContextT $ \c ->
-    let silenceLog = \_ -> return ()
+    let silenceLog _ = return ()
         errLog = hPutStrLn stderr
-        normalLog = hPutStrLn stdout
+        normalLog = putStrLn
     in case logLevel c of
       Quiet -> return ((silenceLog, errLog, silenceLog), c)
       Normal -> return ((normalLog, errLog, silenceLog), c)
@@ -280,13 +319,13 @@ prepareLogger = WebContextT $ \c ->
 
 -- | Record a node in the context for the DFS evaluation.
 recordNode :: (Monad m) 
-           => (EvalState node rezPath, Int) -> WebContextT node rezPath m ()
+           => (EvalState node rezPath, StateNumber) -> WebContextT node rezPath m ()
 recordNode n = WebContextT $ \c ->
     return ((), c{ waitingStates = n : waitingStates c })
 
 -- | Get the last record from the top of the stack
 popLastRecord :: (Monad m)
-              => WebContextT node rezPath m (EvalState node rezPath, Int)
+              => WebContextT node rezPath m (EvalState node rezPath, StateNumber)
 popLastRecord = WebContextT $ \c ->
     case waitingStates c of
       [] -> error "popLAst Record - Empty stack!!!"
@@ -305,7 +344,7 @@ popLastRecord = WebContextT $ \c ->
 -- You can look at 'popBranchContext' and 'addToBranchContext'
 -- for other frame manipulation functions.
 pushToBranchContext :: (Monad m)
-                    => (EvalState node rezPath, Int, Int)
+                    => (EvalState node rezPath, SeenCounter, ValidSeenCounter)
                     -> WebContextT node rezPath m ()
 pushToBranchContext cont = WebContextT $ \c ->
     return ((), c{ branchContext = cont : branchContext c })
@@ -313,7 +352,7 @@ pushToBranchContext cont = WebContextT $ \c ->
 -- | Retrieve the frame on the top of the stack.
 -- for more information regarding frames see 'pushToBranchContext'
 popBranchContext :: (Monad m)
-                 => WebContextT node rezPath m (EvalState node rezPath, Int, Int)
+                 => WebContextT node rezPath m (EvalState node rezPath, SeenCounter, ValidSeenCounter)
 popBranchContext = WebContextT $ \c ->
     case branchContext c of
       [] -> error "popBranchContext - empty branch context"
@@ -324,7 +363,7 @@ popBranchContext = WebContextT $ \c ->
 --
 -- for more information regarding frames see 'pushToBranchContext'
 addToBranchContext :: (Monad m)
-                   => Int -> Int -> WebContextT node rezPath m ()
+                   => SeenCounter -> ValidSeenCounter -> WebContextT node rezPath m ()
 addToBranchContext count validCount = WebContextT $ \c ->
     case branchContext c of
       [] -> error "addToBranchContext - empty context stack"

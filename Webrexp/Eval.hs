@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Webrexp.Eval
     (
     -- * Functions
@@ -8,6 +9,7 @@ module Webrexp.Eval
 import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class
+import Data.List
 import Text.Regex.PCRE
 
 import Webrexp.GraphWalker
@@ -15,25 +17,45 @@ import Webrexp.Exprtypes
 import Webrexp.WebContext
 
 import Webrexp.Log
-import qualified Data.ByteString.Lazy as B
+import qualified Webrexp.ProjectByteString as B
 
 -- | Given a node search for valid children, check for their
 -- validity against the requirement.
 searchRefIn :: (GraphWalker node rezPath)
-            => WebRef -> NodeContext node rezPath
-            -> [NodeContext node rezPath]
-searchRefIn (Elem s) n =
+            => Bool                         -- ^ Do we recurse?
+            -> WebRef                       -- ^ Ref to find
+            -> NodeContext node rezPath     -- ^ The root nood for the search
+            -> [NodeContext node rezPath]   -- ^ The found nodes.
+searchRefIn False Wildcard n =
+    [ NodeContext {
+        parents = (this n, idx) : parents n,
+        this = sub,
+        rootRef = rootRef n
+     }  | (sub, idx) <- zip (childrenOf $ this n) [0..]]
+
+searchRefIn True Wildcard n =
+    [ NodeContext {
+        parents = subP ++ parents n,
+        this = sub,
+        rootRef = rootRef n
+    }  | (sub, subP) <- descendants $ this n]
+
+searchRefIn True (Elem s) n =
     [ NodeContext {
         parents = subP ++ parents n,
         this = sub,
         rootRef = rootRef n
     }  | (sub, subP) <- findNamed s $ this n]
-searchRefIn (OfClass r s) n =
-    [v | v <- searchRefIn r n, attribOf "class" (this v) == Just s]
-searchRefIn (Attrib  r s) n =
-    [v | v <- searchRefIn r n, attribOf s (this v) /= Nothing]
-searchRefIn (OfName  r s) n =
-    [v | v <- searchRefIn r n, attribOf "id" (this v) == Just s]
+
+searchRefIn False (Elem s) n =
+    [v | v <- searchRefIn False Wildcard n, nameOf (this v) == Just s]
+
+searchRefIn recurse (OfClass r s) n =
+    [v | v <- searchRefIn recurse r n, attribOf "class" (this v) == Just s]
+searchRefIn recurse (Attrib  r s) n =
+    [v | v <- searchRefIn recurse r n, attribOf s (this v) /= Nothing]
+searchRefIn recurse (OfName  r s) n =
+    [v | v <- searchRefIn recurse r n, attribOf "id" (this v) == Just s]
 
 
 -- | Evaluate the leaf nodes of a webrexp, this way the code
@@ -47,7 +69,7 @@ evalWebRexpFor (Str str) _ = do
     return (True, [Text str])
 
 evalWebRexpFor (Action action) e = do
-    debugLog "> '{...}'"
+    debugLog $ "> '[...]'"
     (rez, neoNode) <- evalAction action $ Just e
     dumpActionVal rez
     if isActionResultValid rez
@@ -65,7 +87,7 @@ evalWebRexpFor (Unique bucket) e = do
            visited (Blob b) = checkUnique . show $ sourcePath b
            checkUnique s = do
                seen <- hasResourceBeenVisited bucket s
-               when (not seen)
+               unless seen
                     (setResourceVisited bucket s)
                return $ not seen
 
@@ -74,30 +96,39 @@ evalWebRexpFor (ConstrainedRef s action) e = do
     if not valid
       then return ref
       else do
-      	lst'  <- mapM (evalWebRexpFor $ Action action) lst
-      	return (any fst lst', concat $ map snd lst')
-      	  
+          lst'  <- mapM (evalWebRexpFor $ Action action) lst
+          return (any fst lst', concatMap snd lst')
+            
+
+evalWebRexpFor (DirectChild ref) (Node n) = do
+    debugLog $ "> direct 'ref' : " ++ show ref
+    let n' = map Node $ searchRefIn False ref n
+    debugLog $ ">>> found ->" ++ show (length n')
+    return (not $ null n', n')
+
+evalWebRexpFor (DirectChild _) _ = return (False, [])
 
 evalWebRexpFor (Ref ref) (Node n) = do
     debugLog $ "> 'ref' : " ++ show ref
-    let n' = map Node $ searchRefIn ref n
+    let n' = map Node $ searchRefIn True ref n
     debugLog $ ">>> found ->" ++ show (length n')
     return (not $ null n', n')
+
 evalWebRexpFor (Ref _) _ = return (False, [])
 
 evalWebRexpFor DiggLink e = do
-    debugLog "> '>'"
+    debugLog "> '>>'"
     e' <- diggLinks e
     return (not $ null e', e')
 
 evalWebRexpFor NextSibling e = do
-  debugLog "> '/'"
+  debugLog "> '+'"
   case siblingAccessor 1 e of
     Nothing -> return (False, [])
     Just e' -> return (True, [e'])
 
 evalWebRexpFor PreviousSibling e = do
-  debugLog "> '^'"
+  debugLog "> '~'"
   case siblingAccessor (-1) e of
     Nothing -> return (False, [])
     Just e' -> return (True, [e'])
@@ -109,10 +140,22 @@ evalWebRexpFor Parent (Node e) = do
       (n,_):ps -> return (True, [Node $ e { parents = ps, this = n }])
 evalWebRexpFor Parent _ = return (False, [])
 
-evalWebRexpFor _ _ =
-    error "evalWebRexpFor - non terminal in terminal function."
-
-
+-- Exaustive definition to get better warning from compiler in case
+-- of modification
+evalWebRexpFor (Branch _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
+evalWebRexpFor (Unions _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
+evalWebRexpFor (List _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
+evalWebRexpFor (Star _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
+evalWebRexpFor (Repeat _ _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
+evalWebRexpFor (Alternative _ _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
+evalWebRexpFor (Range _ _) _ =
+     error "evalWebRexpFor - non terminal in terminal function."
 
 downLinks :: (GraphWalker node rezPath)
           => rezPath
@@ -123,10 +166,10 @@ downLinks path = do
     case down of
          AccessError -> return []
          DataBlob u b -> return [Blob $ BinBlob u b]
-         Result u n -> return [Node $
+         Result u n -> return [Node 
                     NodeContext { parents = []
-         	                    , rootRef = u
-         	                    , this = n }]
+                                 , rootRef = u
+                                 , this = n }]
 
 --------------------------------------------------
 ----            Helper functions
@@ -134,7 +177,7 @@ downLinks path = do
 diggLinks :: (GraphWalker node rezPath)
           => EvalState node rezPath
           -> WebCrawler node rezPath [EvalState node rezPath]
-diggLinks (Node n) = do
+diggLinks (Node n) =
     concat <$> sequence
             [ downLinks $ rootRef n <//> indir
                                 | indir <- indirectLinks $ this n ]
@@ -147,7 +190,7 @@ diggLinks _ = return []
 siblingAccessor :: (GraphWalker node rezPath)
                 => Int -> EvalState node rezPath
                 -> Maybe (EvalState node rezPath)
-siblingAccessor 0   node@(Node _) = Just $ node
+siblingAccessor 0   node@(Node _) = Just node
 siblingAccessor idx (Node node)=
     case parents node of
       [] -> Nothing
@@ -215,9 +258,7 @@ binComp _ _ = ATypeError
 
 boolComp :: (Bool -> Bool -> Bool) -> ActionValue -> ActionValue -> ActionValue
 boolComp f (ABool a) (ABool b) = ABool $ f a b
-boolComp f a         (AInt b) = boolComp f a (ABool $ b /= 0)
-boolComp f (AInt a)         b = boolComp f (ABool $ a /= 0) b
-boolComp _ _                _ = ABool $ False
+boolComp _ _                _ = ABool False
 
 isActionResultValid :: ActionValue -> Bool
 isActionResultValid (ABool False) = False
@@ -227,6 +268,7 @@ isActionResultValid _ = True
 
 dumpActionVal :: ActionValue -> WebCrawler node rezPath ()
 dumpActionVal (AString s) = textOutput s
+dumpActionVal (AInt i) = textOutput $ show i
 dumpActionVal _ = return ()
 
 dumpContent :: (GraphWalker node rezPath)
@@ -239,7 +281,7 @@ dumpContent e@(Just (Node ns)) =
     links -> do
         loggers <- prepareLogger
         mapM_ (\l -> dumpDataAtPath loggers $
-                            (rootRef ns) <//> l) links
+                            rootRef ns <//> l) links
         return (ABool True, e)
 dumpContent e@(Just (Text str)) = return (AString str, e)
 dumpContent e@(Just (Blob b)) = do
@@ -257,7 +299,9 @@ evalAction :: (GraphWalker node rezPath)
                         (ActionValue, Maybe (EvalState node rezPath))
 evalAction (ActionExprs actions) e = foldM eval (ABool True, e) actions
     where eval v@(ABool False, _) _ = return v
+          eval v@(ATypeError, _) _ = return v
           eval (actionVal, el) act = do
+              debugLog $ "\t>" ++ show actionVal
               dumpActionVal actionVal
               evalAction act el
 
@@ -275,10 +319,10 @@ evalAction (CstS s) n = return (AString s, n)
 evalAction OutputAction e =
     dumpContent e
 
-evalAction (ARef r) e@(Just (Node n)) = do
+evalAction (ARef r) e@(Just (Node n)) =
     case attribOf r (this n) of
       Nothing -> return (ABool False, e)
-      Just s -> return $ (AString s, e)
+      Just s -> return (AString s, e)
 
 evalAction (ARef _) _ =
     return (ATypeError, Nothing)
@@ -302,4 +346,18 @@ evalAction (BinOp OpNe a b) e = binArith (\a' b' -> valNot $ binComp a' b') e a 
 
 evalAction (BinOp OpAnd a b) e = binArith (boolComp (&&)) e a b
 evalAction (BinOp OpOr  a b) e = binArith (boolComp (||)) e a b
+
+evalAction (BinOp OpContain a b) e =
+    binArith (stringPredicate contain) e a b
+        where contain att val = val `elem` words att
+evalAction (BinOp OpHyphenBegin a b) e = 
+    binArith (stringPredicate contain) e a b
+      where contain att val = val == fst (break ('-' ==) att)
+evalAction (BinOp OpBegin a b) e =
+    binArith (stringPredicate $ flip isPrefixOf) e a b
+evalAction (BinOp OpEnd a b) e =
+    binArith (stringPredicate $ flip isSuffixOf) e a b
+evalAction (BinOp OpSubstring a b) e =
+    binArith (stringPredicate $ flip isInfixOf) e a b
+
 

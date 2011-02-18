@@ -2,7 +2,7 @@
 -- It shouldn't be used directly.
 module Webrexp.Parser( webRexpParser ) where
 
-import Control.Applicative( (<$>), (<*), (<$) )
+import Control.Applicative( (<$>), (<$), (<*>) )
 import Control.Monad.Identity
 
 import Webrexp.Exprtypes
@@ -36,10 +36,6 @@ parens :: ParsecT String u Identity a
        -> ParsecT String u Identity a
 parens = P.parens lexer
 
-braces :: ParsecT String u Identity a 
-       -> ParsecT String u Identity a
-braces = P.braces lexer
-
 brackets :: ParsecT String u Identity a 
          -> ParsecT String u Identity a
 brackets = P.brackets lexer
@@ -63,7 +59,6 @@ lexer  = P.makeTokenParser
 webrexpCombinator :: OperatorTable String st Identity WebRexp
 webrexpCombinator =
     [ [ postfix "*" Star
-      , postfix "+" Plus
       , Postfix repeatOperator ]
     , [ binary "|" Alternative AssocLeft ]
     ]
@@ -77,6 +72,15 @@ operatorDefs =
     , [binary "=" (BinOp OpEq)  AssocRight
       ,binary "!=" (BinOp OpNe) AssocLeft
       ,binary "=~" (BinOp OpMatch) AssocLeft
+      ,binary "~=" (BinOp OpContain) AssocLeft
+
+      -- CSS compatibility...
+      ,binary "~=" (BinOp OpContain) AssocLeft
+      ,binary "^=" (BinOp OpBegin) AssocLeft
+      ,binary "$=" (BinOp OpEnd) AssocLeft
+      ,binary "*=" (BinOp OpSubstring) AssocLeft
+      ,binary "|=" (BinOp OpHyphenBegin) AssocLeft
+
       ,binary "<" (BinOp OpLt)  AssocLeft
       ,binary ">"  (BinOp OpGt) AssocLeft
       ,binary "<=" (BinOp OpLe) AssocLeft
@@ -97,29 +101,30 @@ noderange = do
 
 rangeParser :: Parsed st WebRexp
 rangeParser = do
-    Range (-1) . simplifyNodeRanges <$> 
-            sepBy noderange (whiteSpace >> char ',' >> whiteSpace)
-                            <* whiteSpace
+    string "#{" >> whiteSpace
+    vals <- sepBy noderange separator
+    _ <- whiteSpace >> char '}'
+    return . Range (-1) $ simplifyNodeRanges vals
+     where separator = whiteSpace >> char ',' >> whiteSpace
 
 webrexpOp :: Parsed st WebRexp
-webrexpOp =  spaceSurrounded ops
-    where ops =  (DiggLink <$ char '>')
-             <|> (PreviousSibling <$ char '^')
-             <|> (NextSibling <$ char '/')
-             <|> (Parent <$ char '<')
-             <|> (Unique (-1) <$ char '!')
-             <?> "webrexpOp"
+webrexpOp = (DiggLink <$ string ">>")
+         <|> (PreviousSibling <$ char '~')
+         <|> (NextSibling <$ char '+')
+         <|> (Parent <$ char '<')
+         <|> (Unique (-1) <$ char '!')
+         <?> "webrexpOp"
 
 repeatCount :: Parsed st RepeatCount
 repeatCount = do
     begin <- fromInteger <$> natural
-    parseComma begin <|> (return $ RepeatTimes begin)
+    parseComma begin <|> return (RepeatTimes begin)
      where parseComma firstNum = do
              whiteSpace
              _ <- char ','
              whiteSpace
-             parseLastNumber firstNum <|> (return $ 
-                                        RepeatAtLeast firstNum) 
+             parseLastNumber firstNum <|> return
+                                        (RepeatAtLeast firstNum) 
                 
            parseLastNumber firstNum = do
               endNum <- fromInteger <$> natural
@@ -128,12 +133,9 @@ repeatCount = do
 repeatOperator :: Parsed st (WebRexp -> WebRexp)
 repeatOperator = (do
     whiteSpace
-    _ <-  string "#{"
-    whiteSpace
+    _ <-  char '{' >> whiteSpace
     counts <- repeatCount
-    whiteSpace
-    _ <- char '}'
-    whiteSpace
+    _ <- whiteSpace >> char '}' >> whiteSpace
     return $ Repeat counts) <?> "#{repeat}"
 
 webident :: Parsed st String
@@ -148,20 +150,17 @@ webrefop = (OfClass <$ char '.')
 
 webref :: Parsed st WebRef
 webref = do
-    initial <- Elem <$> webident
+    initial <- (Elem <$> webident) <|> (Wildcard <$ char '_')
     (do op <- webrefop
         next <- webident
         return $ op initial next) <|> return initial
 
-attribute :: Parsed st String
-attribute = char '@' >> webident
-
 actionTerm :: Parsed st ActionExpr
-actionTerm = (ARef <$> attribute)
+actionTerm = (CstI . fromIntegral <$> natural)
           <|> parens actionExpr
           <|> (CstS <$> stringLiteral)
-          <|> (CstI . fromIntegral <$> natural)
           <|> (OutputAction <$ char '.')
+          <|> (ARef <$> webident)
           <?> "actionTerm"
 
 actionExpr :: Parsed st ActionExpr
@@ -178,16 +177,22 @@ actionList = (aexpr <$>
            aexpr b = ActionExprs b
 
 webrexp :: Parsed st WebRexp
-webrexp = (do path <- exprPath
+webrexp = (do path <- exprUnion
               rest <- (recParser <|> return [])
               return . aBrancher $ path : rest) <?> "webrexp"
-    where separator = (whiteSpace >> char ';' >> whiteSpace)
+    where separator = whiteSpace >> char ';' >> whiteSpace
           aBrancher [a] = a
           aBrancher a = Branch a
           recParser = separator >>
-           ((do p <- exprPath 
-                (recParser >>= return . (p :)) <|> return [p]) <|> return [List []])
+           ((do p <- exprUnion
+                ((p:) <$> recParser) <|> return [p]) <|> return [List []])
 
+
+exprUnion :: Parsed st WebRexp
+exprUnion = unioner <$> exprPath `sepBy1` separator
+    where separator = whiteSpace >> char ',' >> whiteSpace
+          unioner [a] = a
+          unioner a = Unions a
 
 exprPath :: Parsed st WebRexp
 exprPath = (list <$> many1 expr)
@@ -201,9 +206,9 @@ expr = buildExpressionParser webrexpCombinator (spaceSurrounded expterm)
 
 expterm :: Parsed st WebRexp
 expterm = parens webrexp
-       <|> braces (Action <$> actionList)
-       <|> brackets rangeParser
-       <|> webrexpOp
+       <|> brackets (Action <$> actionList)
+       <|> rangeParser
+       <|> (try (DirectChild <$ (char '>' >> whiteSpace) <*> webref) <|> webrexpOp)
        <|> (Str <$> stringLiteral)
        <|> (Ref <$> webref)
        <?> "expterm"

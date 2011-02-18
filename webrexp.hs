@@ -20,15 +20,14 @@ import System.Exit
 
 import Webrexp.Exprtypes
 import Webrexp.Parser( webRexpParser )
-import Webrexp.HxtNode
+import Webrexp.HaXmlNode
+import Webrexp.JsonNode
+import Webrexp.UnionNode
+
 import Webrexp.ResourcePath
 import Webrexp.WebContext
 
--- we need the instance
-import Webrexp.HxtNode ()
-
 import Webrexp.WebRexpAutomata
-
 
 data Conf = Conf
     { hammeringDelay :: Int
@@ -55,7 +54,8 @@ defaultConf = Conf
     , depthEvaluation = True
     }
 
-type Crawled a = WebCrawler HxtNode ResourcePath a
+type Crawled a = WebCrawler (UnionNode HaXmLNode JsonNode)
+                            ResourcePath a
 
 -- | Prepare a webrexp.
 -- This function is useful if the expression has
@@ -89,7 +89,7 @@ evalWebRexpWithEvaluator evaluator str =
   case runParser webRexpParser () "expr" str of
     Left err -> do
         putStrLn "Parsing error :\n"
-        putStrLn $ show err
+        print err
         return False
 
     Right wexpr ->
@@ -101,7 +101,7 @@ evalWebRexpWithConf conf =
   case runParser webRexpParser () "expr" (expr conf) of
     Left err -> do
         putStrLn "Parsing error :\n"
-        putStrLn $ show err
+        print err
         return False
 
     Right wexpr -> do
@@ -121,8 +121,9 @@ evalWebRexpWithConf conf =
               	 else evalBreadthFirst wexpr
 
         rez <- evalWithEmptyContext crawled
-        if output conf /= stdout
-           then hClose $ output conf
-           else return ()
+
+        when (output conf /= stdout)
+             (hClose $ output conf)
+
         return rez
 

@@ -15,12 +15,13 @@ module Webrexp.GraphWalker
     , NodePath
 
     -- * Helper functions.
+    , descendants 
     , findNamed
     , findFirstNamed 
     ) where
 
 import Control.Monad.IO.Class
-import qualified Data.ByteString.Lazy as B
+import qualified Webrexp.ProjectByteString as B
 
 -- | Represent the path used to find the node
 -- from the starting point of the graph.
@@ -75,7 +76,7 @@ data AccessResult a rezPath =
 -- the logic should use this interface.
 --
 -- Minimal implementation : everything.
-class (Show a, GraphPath rezPath)
+class (GraphPath rezPath)
         => GraphWalker a rezPath | a -> rezPath where
     -- | Get back an attribute of the node
     -- if it exists
@@ -105,6 +106,15 @@ class (Show a, GraphPath rezPath)
     accessGraph :: (MonadIO m)
                 => Loggers -> rezPath -> m (AccessResult a rezPath)
 
+-- | Return a list of all the "children"/linked node of a given node.
+-- The given node is not included in the list.
+-- A list of node with the taken path is returned.
+descendants :: (GraphWalker a r) => a -> [(a, [(a, Int)])]
+descendants node = findDescendants (node, [])
+   where findDescendants (a, hist) = concat $ lst : map findDescendants lst
+              where lst = [(child, (a,idx) : hist) |
+                                (child, idx) <- zip (childrenOf a) [0..]]
+
 -- | Given a tag and a name, retrieve
 -- the first matching tags in the hierarchy.
 -- It must return the list of ancestors permitting
@@ -115,13 +125,11 @@ class (Show a, GraphPath rezPath)
 -- good name.
 findNamed :: (GraphWalker a r)
           => String -> a -> [(a, [(a, Int)])]
-findNamed name node = thisNodeValid ++ findSubNamed (node, [])
-    where thisNodeValid = if nameOf node == Just name
-                                then [(node,[])] else []
-          findSubNamed (a, hist) = concat $
-            filter (\(c,_) -> nameOf c == Just name) lst : map findSubNamed lst
-              where lst = [(child, (a,idx) : hist) |
-                                (child, idx)<- zip (childrenOf a) [0..]]
+findNamed name node = if nameOf node == Just name
+                         then (node, []) : validChildren
+                         else validChildren
+    where validChildren = filter (\(c,_) -> nameOf c == Just name)
+                        $ descendants node
 
 -- | Return the first found node if any.
 findFirstNamed :: (GraphWalker a r)

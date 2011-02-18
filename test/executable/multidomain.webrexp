@@ -1,0 +1,7 @@
+"multidomain.html" >>
+    ( h1 [.; "\n"] ; a)
+    >>
+    ( anArray subval [.; "\n"] ; link)
+    [$ .] >>
+    h1 [.; "\n"]
+

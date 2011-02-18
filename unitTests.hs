@@ -13,7 +13,7 @@ nodeRangeTests =
     , "Simplification" ~: [Interval 1 3, Index 6] ~=? simplifyNodeRanges [Interval 1 3, Index 6, Index 1, Interval 1 2]
     , "Simplification2" ~: [Interval 1 3, Index 6, Index 7] ~=? simplifyNodeRanges [Index 6, Interval 1 3, Index 6, Index 7, Index 1, Interval 1 2]
     ]
-tests = TestList $ nodeRangeTests
+tests = TestList nodeRangeTests
 
 main :: IO ()
 main = do
