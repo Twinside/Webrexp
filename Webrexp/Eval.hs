@@ -25,38 +25,45 @@ searchRefIn :: (GraphWalker node rezPath)
             => Bool                         -- ^ Do we recurse?
             -> WebRef                       -- ^ Ref to find
             -> NodeContext node rezPath     -- ^ The root nood for the search
-            -> [NodeContext node rezPath]   -- ^ The found nodes.
-searchRefIn False Wildcard n =
-    [ NodeContext {
+            -> WebCrawler node rezPath
+                        [NodeContext node rezPath]   -- ^ The found nodes.
+searchRefIn False Wildcard n = do
+    children <- childrenOf $ this n
+    return [ NodeContext {
         parents = (this n, idx) : parents n,
         this = sub,
         rootRef = rootRef n
-     }  | (sub, idx) <- zip (childrenOf $ this n) [0..]]
+     } | (sub, idx) <- zip children [0..]]
 
-searchRefIn True Wildcard n =
-    [ NodeContext {
+searchRefIn True Wildcard n = do
+    subs <- descendants $ this n
+    return [ NodeContext {
         parents = subP ++ parents n,
         this = sub,
         rootRef = rootRef n
-    }  | (sub, subP) <- descendants $ this n]
+    }  | (sub, subP) <- subs ]
 
-searchRefIn True (Elem s) n =
-    [ NodeContext {
+searchRefIn True (Elem s) n = do
+    subs <- findNamed s $ this n
+    return [ NodeContext {
         parents = subP ++ parents n,
         this = sub,
         rootRef = rootRef n
-    }  | (sub, subP) <- findNamed s $ this n]
+    }  | (sub, subP) <- subs ]
 
-searchRefIn False (Elem s) n =
-    [v | v <- searchRefIn False Wildcard n, nameOf (this v) == Just s]
+searchRefIn False (Elem s) n = do
+    subs <- searchRefIn False Wildcard n
+    return [v | v <- subs, nameOf (this v) == Just s]
 
-searchRefIn recurse (OfClass r s) n =
-    [v | v <- searchRefIn recurse r n, attribOf "class" (this v) == Just s]
-searchRefIn recurse (Attrib  r s) n =
-    [v | v <- searchRefIn recurse r n, attribOf s (this v) /= Nothing]
-searchRefIn recurse (OfName  r s) n =
-    [v | v <- searchRefIn recurse r n, attribOf "id" (this v) == Just s]
-
+searchRefIn recurse (OfClass r s) n = do
+    subs <- searchRefIn recurse r n
+    return [v | v <- subs, attribOf "class" (this v) == Just s]
+searchRefIn recurse (Attrib  r s) n = do
+    subs <- searchRefIn recurse r n
+    return [v | v <- subs, attribOf s (this v) /= Nothing]
+searchRefIn recurse (OfName  r s) n = do
+    subs <- searchRefIn recurse r n
+    return [v | v <- subs, attribOf "id" (this v) == Just s]
 
 -- | Evaluate the leaf nodes of a webrexp, this way the code
 -- can be shared between the Breadth first evaluator and the
@@ -102,7 +109,8 @@ evalWebRexpFor (ConstrainedRef s action) e = do
 
 evalWebRexpFor (DirectChild ref) (Node n) = do
     debugLog $ "> direct 'ref' : " ++ show ref
-    let n' = map Node $ searchRefIn False ref n
+    subs <- searchRefIn False ref n
+    let n' = map Node subs
     debugLog $ ">>> found ->" ++ show (length n')
     return (not $ null n', n')
 
@@ -110,7 +118,8 @@ evalWebRexpFor (DirectChild _) _ = return (False, [])
 
 evalWebRexpFor (Ref ref) (Node n) = do
     debugLog $ "> 'ref' : " ++ show ref
-    let n' = map Node $ searchRefIn True ref n
+    subs <- searchRefIn True ref n
+    let n' = map Node subs
     debugLog $ ">>> found ->" ++ show (length n')
     return (not $ null n', n')
 
@@ -123,13 +132,15 @@ evalWebRexpFor DiggLink e = do
 
 evalWebRexpFor NextSibling e = do
   debugLog "> '+'"
-  case siblingAccessor 1 e of
+  subs <- siblingAccessor 1 e 
+  case subs of
     Nothing -> return (False, [])
     Just e' -> return (True, [e'])
 
 evalWebRexpFor PreviousSibling e = do
   debugLog "> '~'"
-  case siblingAccessor (-1) e of
+  subs <- siblingAccessor (-1) e
+  case subs of
     Nothing -> return (False, [])
     Just e' -> return (True, [e'])
 
@@ -189,23 +200,24 @@ diggLinks _ = return []
 -- | Let access sibling nodes with a predefined index.
 siblingAccessor :: (GraphWalker node rezPath)
                 => Int -> EvalState node rezPath
-                -> Maybe (EvalState node rezPath)
-siblingAccessor 0   node@(Node _) = Just node
+                -> WebCrawler node rezPath
+                             (Maybe (EvalState node rezPath))
+siblingAccessor 0   node@(Node _) = return $ Just node
 siblingAccessor idx (Node node)=
     case parents node of
-      [] -> Nothing
-      (n,i):ps ->
-          let children = childrenOf n
-              childrenCount = length children
+      [] -> return Nothing
+      (n,i):ps -> do
+          children <- childrenOf n
+          let childrenCount = length children
               neoIndex = i + idx
-          in if neoIndex < 0 || neoIndex >= childrenCount
-                then Nothing
-                else Just . Node $ NodeContext
+          if neoIndex < 0 || neoIndex >= childrenCount
+                then return Nothing
+                else return . Just . Node $ NodeContext
                         { parents = (n, neoIndex):ps
                         , this = children !! neoIndex
                         , rootRef = rootRef node
                         }
-siblingAccessor _ _ = Nothing
+siblingAccessor _ _ = return Nothing
 
 --------------------------------------------------
 ----            Action Evaluation

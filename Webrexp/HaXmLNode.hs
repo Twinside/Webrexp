@@ -45,8 +45,7 @@ instance GraphWalker HaXmLNode ResourcePath where
         show <$> lookup attrName attrList
     attribOf _ _ = Nothing
 
-    childrenOf (CElem (Elem _ _ children) _) = children
-    childrenOf _ = []
+    childrenOf = return . pureChildren
 
     nameOf (CElem (Elem n _ _) _) = Just n
     nameOf _ = Nothing
@@ -56,9 +55,13 @@ instance GraphWalker HaXmLNode ResourcePath where
                   , attribOf "src" n >>= importPath ]
 
     valueOf (CString _ sdata _) = sdata
-    valueOf a = case childrenOf a of
-            (CString _ txt _:_) -> txt
-            _ -> ""
+    valueOf a = case pureChildren a of
+       (CString _ txt _:_) -> txt
+       _ -> ""
+
+pureChildren :: HaXmLNode -> [HaXmLNode]
+pureChildren (CElem (Elem _ _ children) _) = children
+pureChildren _ = []
 
 parserOfKind :: Maybe ParseableType
              -> ResourcePath

@@ -20,6 +20,7 @@ module Webrexp.GraphWalker
     , findFirstNamed 
     ) where
 
+import Control.Applicative
 import Control.Monad.IO.Class
 import qualified Webrexp.ProjectByteString as B
 
@@ -88,7 +89,7 @@ class (GraphPath rezPath)
 
     -- | Get all the children of the current
     -- node.
-    childrenOf :: a -> [a]
+    childrenOf :: (MonadIO m) => a -> m [a]
 
     -- | Retrieve the value of the tag (textual)
     valueOf :: a -> String
@@ -109,11 +110,14 @@ class (GraphPath rezPath)
 -- | Return a list of all the "children"/linked node of a given node.
 -- The given node is not included in the list.
 -- A list of node with the taken path is returned.
-descendants :: (GraphWalker a r) => a -> [(a, [(a, Int)])]
+descendants :: (MonadIO m, GraphWalker a r) => a -> m [(a, [(a, Int)])]
 descendants node = findDescendants (node, [])
-   where findDescendants (a, hist) = concat $ lst : map findDescendants lst
-              where lst = [(child, (a,idx) : hist) |
-                                (child, idx) <- zip (childrenOf a) [0..]]
+   where findDescendants (a, hist) = do
+             children <- childrenOf a
+             let lst = [ (child, (a,idx) : hist)
+                         | (child, idx) <- zip children [0..]]
+             xs <- mapM findDescendants lst
+             return . concat $ lst : xs
 
 -- | Given a tag and a name, retrieve
 -- the first matching tags in the hierarchy.
@@ -123,20 +127,20 @@ descendants node = findDescendants (node, [])
 -- the returned list must contain : the node itself if
 -- it match the name, and all the children containing the
 -- good name.
-findNamed :: (GraphWalker a r)
-          => String -> a -> [(a, [(a, Int)])]
+findNamed :: (Functor m, MonadIO m, GraphWalker a r)
+          => String -> a -> m [(a, [(a, Int)])]
 findNamed name node = if nameOf node == Just name
-                         then (node, []) : validChildren
+                         then ((node, []) :) <$> validChildren
                          else validChildren
     where validChildren = filter (\(c,_) -> nameOf c == Just name)
-                        $ descendants node
+                       <$> descendants node
 
 -- | Return the first found node if any.
-findFirstNamed :: (GraphWalker a r)
-               => String -> [a] -> Maybe (a, [(a,Int)])
-findFirstNamed name lst = case results of
-                             [] -> Nothing
-                             (x:_) -> Just x
-
-    where results = concatMap (findNamed name) lst 
+findFirstNamed :: (Functor m, MonadIO m, GraphWalker a r)
+               => String -> [a] -> m (Maybe (a, [(a,Int)]))
+findFirstNamed name lst = do
+    nameList <- mapM (findNamed name) lst
+    case concat nameList of
+       [] -> return Nothing
+       (x:_) -> return $ Just x
 

@@ -37,9 +37,11 @@ instance GraphWalker JsonNode ResourcePath where
             where none a = (Nothing :: Maybe String, a)
     attribOf _ _ = Nothing
 
-    childrenOf (_, JSArray children) = (,) Nothing <$> children
-    childrenOf (_, JSObject obj) = first (Just . B.unpack) <$> Map.assocs obj
-    childrenOf _ = []
+    childrenOf (_, JSArray children) =
+        return $ (,) Nothing <$> children
+    childrenOf (_, JSObject obj) =
+        return $ first (Just . B.unpack) <$> Map.assocs obj
+    childrenOf _ = return []
 
     nameOf (Just s, _) = Just s
     nameOf _ = Nothing
