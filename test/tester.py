@@ -52,8 +52,12 @@ def diffFile( fileName1, fileName2 ):
     return False
 
 # Run a test case
-def testRunner( runAction, okPredicate, path ):
+def testRunner( verbose, runAction, okPredicate, path ):
     tempFilename = "tmpTestFile"
+
+    if verbose:
+        print(path)
+
     rezCode = runAction(path, tempFilename )
 
     if okPredicate(rezCode):
@@ -90,34 +94,35 @@ def execRunner( path, tempFilename ):
     return os.system(runnable + path + " > " + tempFilename)
 
 # Run... all the valid test cases
-def runAllValidTests():
+def runAllValidTests(verbose):
     for filename in glob.glob("*.webrexp"):
-        testRunner(execRunner, lambda retCode: retCode != 0, filename)
+        testRunner(verbose, execRunner, lambda retCode: retCode != 0, filename)
 
-def runAllWrongTests():
+def runAllWrongTests(verbose):
     for filename in glob.glob("mustfail/*.webrexp"):
-        testRunner(execRunner, lambda retCode: retCode == 0, filename)
+        testRunner(verbose, execRunner, lambda retCode: retCode == 0, filename)
 
 def syntaxRunner( path, tempFilename ):
     runnable = "../dist/build/Webrexp/webrexp --dot -q -f "
     return os.system(runnable + path + " > /dev/null" )
     
-def runSyntaxValid():
+def runSyntaxValid(verbose):
     for filename in glob.glob("puresyntax/valid/*.webrexp"):
-        testRunner(syntaxRunner, lambda retCode: retCode != 0, filename)
+        testRunner(verbose, syntaxRunner, lambda retCode: retCode != 0, filename)
     
-def runSyntaxInvalid():
+def runSyntaxInvalid(verbose):
     for filename in glob.glob("puresyntax/invalid/*.webrexp"):
-        testRunner(syntaxRunner, lambda retCode: retCode == 0, filename)
+        testRunner(verbose, syntaxRunner, lambda retCode: retCode == 0, filename)
 
 if __name__ == "__main__":
+    verbose = True
     print(">> Syntax")
-    runSyntaxValid()
-    runSyntaxInvalid()
+    runSyntaxValid(verbose)
+    runSyntaxInvalid(verbose)
 
     print("\n>> Executable")
     os.chdir( "executable" )
-    runAllValidTests()
-    runAllWrongTests()
+    runAllValidTests(verbose)
+    runAllWrongTests(verbose)
 
 
