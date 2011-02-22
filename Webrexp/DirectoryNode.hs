@@ -1,8 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-module Webrexp.DirectoryNode( DirectoryNode 
+module Webrexp.DirectoryNode( DirectoryNode
                             , toDirectoryNode
-                            , currentDirectoryNode 
+                            , currentDirectoryNode
                             ) where
 
 import Control.Exception
@@ -17,22 +17,30 @@ import Webrexp.WebContext
 
 type FileName = String
 
+-- | Type introduced to avoid stupid positional
+-- errors in the 'DirectoryNode' type.
+newtype FullPath = FullPath String
+    deriving (Eq, Show)
+
 -- | Type representing a local folder directory as a node
 -- (and not as a path)
-data DirectoryNode = 
-      Directory FilePath FileName
-    | File FilePath FileName
-    deriving (Eq)
+data DirectoryNode =
+      Directory FullPath FileName
+    | File FullPath FileName
+    deriving (Eq, Show)
 
 extractPath :: DirectoryNode -> FilePath
-extractPath (Directory a _) = a
-extractPath (File a _) = a
+extractPath (Directory (FullPath a) _) = a
+extractPath (File (FullPath a) _) = a
 
 buildParentList :: FilePath -> [DirectoryNode]
-buildParentList path = map (uncurry Directory) nameFullName
+buildParentList path = map directoryze nameFullName
    where directoryList = splitDirectories path
          -- First the name of the folder, followed by the whole path
          nameFullName = zip directoryList $ scanl1 (</>) directoryList
+
+         directoryze (name, whole) =
+             Directory (FullPath whole) name
 
 
 -- | Transform a filepath into a valid directory node
@@ -46,12 +54,12 @@ toDirectoryNode path = do
     case (existing, dirExist) of
          (_, True) -> return . Just $ NodeContext
             { parents = MutableHistory $ reverse parentPath
-            , this = Directory path fname
+            , this = Directory (FullPath path) fname
             , rootRef = Local . extractPath $ head parentPath
             }
          (True, _) -> return . Just $ NodeContext
             { parents = MutableHistory $ reverse parentPath
-            , this = File path fname
+            , this = File (FullPath path) fname
             , rootRef = Local . extractPath $ head parentPath
             }
          _ -> return Nothing
@@ -84,10 +92,10 @@ instance GraphWalker DirectoryNode ResourcePath where
     nameOf (Directory _ name) = Just name
     nameOf (File _ name) = Just name
 
-    valueOf (File fpath _) = fpath
-    valueOf (Directory fpath _) = fpath
-    
-    indirectLinks (File fpath _) = [Local fpath]
+    valueOf (File (FullPath fpath) _) = fpath
+    valueOf (Directory (FullPath fpath) _) = fpath
+
+    indirectLinks (File _ _) = []
     indirectLinks (Directory _ _) = []
 
     accessGraph _ _ = return AccessError
@@ -95,7 +103,9 @@ instance GraphWalker DirectoryNode ResourcePath where
     isHistoryMutable _ = True
 
     childrenOf (File _ _) = return []
-    childrenOf (Directory path _) = liftIO $ listDirectory path
+    childrenOf (Directory (FullPath path) _) =
+        liftIO $ listDirectory path
+
 
 
 listDirectory :: FilePath -> IO [DirectoryNode]
@@ -105,7 +115,10 @@ listDirectory fpath = do
        Left (_ :: IOError) -> return []
        Right lst ->
          mapM (\path -> do
-            isDir <- doesDirectoryExist path
+            let wholePath = fpath </> path
+            isDir <- doesDirectoryExist wholePath
             let f = if isDir then Directory else File
-            return . f path $ takeFileName path) lst
+            return $ f (FullPath wholePath) path)
+
+              $ filter (\a -> a /= "." && a /= "..") lst
 
