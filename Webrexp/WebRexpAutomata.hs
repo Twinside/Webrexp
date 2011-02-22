@@ -281,11 +281,12 @@ toAutomata rest@Parent  free (onTrue, onFalse) =
 
 -- | Simple function performing a depth first evaluation
 evalDepthFirst :: (GraphWalker node rezPath)
-               => WebRexp -> WebCrawler node rezPath Bool
-evalDepthFirst expr = do
+               => EvalState node rezPath -> WebRexp
+               -> WebCrawler node rezPath Bool
+evalDepthFirst initialState expr = do
     debugLog $ "[Depth first, starting at " ++ show begin ++ "]"
     setBucketCount count rangeCount
-    evalAutomataDFS auto (beginState auto) True (Text "")
+    evalAutomataDFS auto (beginState auto) True initialState
         where auto = buildAutomata neorexp
               begin = beginState auto
               (count, rangeCount, neorexp) = assignWebrexpIndices expr
@@ -397,12 +398,16 @@ evalStateDFS a (AutoState (AutoSimple rexp) onTrue onFalse) _ e = do
 --------------------------------------------------
 ----            BFS evaluation
 --------------------------------------------------
+
+-- | Main function to evaluate the expression in breadth
+-- first order.
 evalBreadthFirst :: (GraphWalker node rezPath)
-                 => WebRexp -> WebCrawler node rezPath Bool
-evalBreadthFirst expr = do
+                 => EvalState node rezPath -> WebRexp
+                 -> WebCrawler node rezPath Bool
+evalBreadthFirst initialState expr = do
     debugLog $ "[Breadth first, starting at " ++ show begin ++ "]"
     setBucketCount count 0
-    evalAutomataBFS auto (beginState auto) True [Text ""]
+    evalAutomataBFS auto (beginState auto) True [initialState]
         where auto = buildAutomata neorexp
               begin = beginState auto
               (count, _, neorexp) = assignWebrexpIndices expr

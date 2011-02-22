@@ -150,7 +150,10 @@ webrefop = (OfClass <$ char '.')
 
 webref :: Parsed st WebRef
 webref = do
-    initial <- (Elem <$> webident) <|> (Wildcard <$ char '_')
+    initialIdent <- webident
+    let initial = if initialIdent == "_"
+            then Wildcard
+            else Elem initialIdent 
     (do op <- webrefop
         next <- webident
         return $ op initial next) <|> return initial

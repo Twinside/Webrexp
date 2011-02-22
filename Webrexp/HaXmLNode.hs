@@ -25,17 +25,17 @@ type HaXmLNode = Content Posn
 instance PartialGraph HaXmLNode ResourcePath where
     dummyElem = undefined
 
-    isResourceParseable _ ParseableHTML = True
-    isResourceParseable _ ParseableXML = True
-    isResourceParseable _ _ = False
+    isResourceParseable _ _ ParseableHTML = True
+    isResourceParseable _ _ ParseableXML = True
+    isResourceParseable _ _ _ = False
 
-    parseResource ParseableHTML bindata = Just $ CElem e noPos
+    parseResource _ ParseableHTML bindata = Just $ CElem e noPos
         where (Document _prolog _ e _) = htmlParse "" $ B.unpack bindata
-    parseResource ParseableXML bindata =
+    parseResource _ ParseableXML bindata =
         case xmlParse' "" $ B.unpack bindata of
             Left _ -> Nothing
             Right (Document _prolog _ e _) -> Just $ CElem e noPos
-    parseResource _ _ = error "Cannot parse"
+    parseResource _ _ _ = error "Cannot parse"
 
 instance GraphWalker HaXmLNode ResourcePath where
     accessGraph = loadHtml
@@ -45,8 +45,7 @@ instance GraphWalker HaXmLNode ResourcePath where
         show <$> lookup attrName attrList
     attribOf _ _ = Nothing
 
-    childrenOf (CElem (Elem _ _ children) _) = children
-    childrenOf _ = []
+    childrenOf = return . pureChildren
 
     nameOf (CElem (Elem n _ _) _) = Just n
     nameOf _ = Nothing
@@ -55,10 +54,16 @@ instance GraphWalker HaXmLNode ResourcePath where
         catMaybes [ attribOf "href" n >>= importPath
                   , attribOf "src" n >>= importPath ]
 
+    isHistoryMutable _ = False
+
     valueOf (CString _ sdata _) = sdata
-    valueOf a = case childrenOf a of
-            (CString _ txt _:_) -> txt
-            _ -> ""
+    valueOf a = case pureChildren a of
+       (CString _ txt _:_) -> txt
+       _ -> ""
+
+pureChildren :: HaXmLNode -> [HaXmLNode]
+pureChildren (CElem (Elem _ _ children) _) = children
+pureChildren _ = []
 
 parserOfKind :: Maybe ParseableType
              -> ResourcePath

@@ -23,11 +23,11 @@ type JsonNode = (Maybe String, JSValue)
 instance PartialGraph JsonNode ResourcePath where
     dummyElem = undefined
 
-    isResourceParseable _ ParseableJson = True
-    isResourceParseable _ _ = False
+    isResourceParseable _ _ ParseableJson = True
+    isResourceParseable _ _ _ = False
 
-    parseResource ParseableJson binData = (,) Nothing <$> readJSON binData
-    parseResource _ _ = error "Wrong kind of parser used"
+    parseResource _ ParseableJson binData = (,) Nothing <$> readJSON binData
+    parseResource _ _ _ = error "Wrong kind of parser used"
 
 instance GraphWalker JsonNode ResourcePath where
     accessGraph = loadJson
@@ -37,9 +37,11 @@ instance GraphWalker JsonNode ResourcePath where
             where none a = (Nothing :: Maybe String, a)
     attribOf _ _ = Nothing
 
-    childrenOf (_, JSArray children) = (,) Nothing <$> children
-    childrenOf (_, JSObject obj) = first (Just . B.unpack) <$> Map.assocs obj
-    childrenOf _ = []
+    childrenOf (_, JSArray children) =
+        return $ (,) Nothing <$> children
+    childrenOf (_, JSObject obj) =
+        return $ first (Just . B.unpack) <$> Map.assocs obj
+    childrenOf _ = return []
 
     nameOf (Just s, _) = Just s
     nameOf _ = Nothing
@@ -47,6 +49,8 @@ instance GraphWalker JsonNode ResourcePath where
     indirectLinks n =
         catMaybes [ attribOf "href" n >>= importPath
                   , attribOf "src" n >>= importPath ]
+
+    isHistoryMutable _ = False
 
     valueOf (_, JSString s) = B.unpack s
     valueOf (_, JSNumber i) = show i
