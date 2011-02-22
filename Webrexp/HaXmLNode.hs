@@ -25,17 +25,17 @@ type HaXmLNode = Content Posn
 instance PartialGraph HaXmLNode ResourcePath where
     dummyElem = undefined
 
-    isResourceParseable _ ParseableHTML = True
-    isResourceParseable _ ParseableXML = True
-    isResourceParseable _ _ = False
+    isResourceParseable _ _ ParseableHTML = True
+    isResourceParseable _ _ ParseableXML = True
+    isResourceParseable _ _ _ = False
 
-    parseResource ParseableHTML bindata = Just $ CElem e noPos
+    parseResource _ ParseableHTML bindata = Just $ CElem e noPos
         where (Document _prolog _ e _) = htmlParse "" $ B.unpack bindata
-    parseResource ParseableXML bindata =
+    parseResource _ ParseableXML bindata =
         case xmlParse' "" $ B.unpack bindata of
             Left _ -> Nothing
             Right (Document _prolog _ e _) -> Just $ CElem e noPos
-    parseResource _ _ = error "Cannot parse"
+    parseResource _ _ _ = error "Cannot parse"
 
 instance GraphWalker HaXmLNode ResourcePath where
     accessGraph = loadHtml

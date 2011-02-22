@@ -12,6 +12,7 @@ module Webrexp.WebContext
     , EvalState (..)
     , BinBlob (..)
     , Context
+    , HistoryPath (..)
 
     -- * Aliases
     -- Only used to provide more meaningful type signatures
@@ -33,6 +34,7 @@ module Webrexp.WebContext
 
     -- * User function
     , evalWithEmptyContext
+    , repurposeNode 
     
     -- * Implementation info
     -- ** Evaluation function
@@ -83,13 +85,25 @@ type WebCrawler node rezPath a = WebContextT node rezPath IO a
 -- | WebContext is 'WebContextT' as a simple Monad
 type WebContext node rezPath a = WebContextT node rezPath Identity a
 
+-- | Record a graph path in a document, from the last indirect
+-- node to this one.
+data HistoryPath node =
+      -- | A path in an immutable graph. The graph that
+      -- doesn't move under our feets, so we store the
+      -- index of the followgin node in the path.
+      ImmutableHistory [(node, Int)]
+
+      -- | If the graph is suceptible to move under our
+      -- feets, we have to search again for the position
+      -- of the node in the parent node.
+    | MutableHistory   [node]
+
 -- | Represent a graph node and the path
 -- used to go up to it.
 data NodeContext node rezPath = NodeContext
-    { -- | A path from the lass indirect node to this one
-      -- The parent node and the index of this node in the
-      -- parent's children is stored.
-      parents :: [(node, Int)] 
+    { -- | Path from the root of the document to
+      -- 'this' node.
+      parents :: HistoryPath node
 
       -- | Real node value
     , this :: node              
@@ -97,6 +111,26 @@ data NodeContext node rezPath = NodeContext
       -- | The last indirect path used to get to this node.
     , rootRef :: rezPath       
     }
+
+-- | Function useful if used in combination of an union-node :
+-- - A function produce a node context for a specific type
+-- - You want to generalise it for a complex union
+-- - Use this function :)
+--
+-- For example to produce a simple union node :
+--
+-- > repurposeNode UnionRight $ initialSimpleNode
+repurposeNode :: (nodeA -> nodeB) -> NodeContext nodeA rezPath
+              -> NodeContext nodeB rezPath
+repurposeNode f node = NodeContext
+    { parents = historyPatcher $ parents node
+    , this = f $ this node
+    , rootRef = rootRef node
+    }
+  where historyPatcher (ImmutableHistory hist) =
+            ImmutableHistory $ map (first f) hist
+        historyPatcher (MutableHistory hist) =
+            MutableHistory $ map f hist
 
 -- | Represent a binary blob, often downloaded.
 data BinBlob rezPath = BinBlob

@@ -30,10 +30,10 @@ class (GraphWalker a rezPath) => PartialGraph a rezPath where
 
     -- | Tell if a node type can parse a given document, used
     -- in the node type decision.
-    isResourceParseable :: a -> ParseableType -> Bool
+    isResourceParseable :: a -> rezPath -> ParseableType -> Bool
 
     -- | The real parsing function.
-    parseResource :: ParseableType -> B.ByteString -> Maybe a
+    parseResource :: rezPath -> ParseableType -> B.ByteString -> Maybe a
 
 -- | Data type which is an instance of graphwalker.
 -- Use it to combine two other node types.
@@ -47,15 +47,15 @@ instance ( PartialGraph a rezPath
       => PartialGraph (UnionNode a b) rezPath where
     dummyElem = undefined
 
-    isResourceParseable _ parser =
-        isResourceParseable (dummyElem :: a) parser ||
-            isResourceParseable (dummyElem :: b) parser
+    isResourceParseable _ datapath parser =
+        isResourceParseable (dummyElem :: a) datapath parser ||
+            isResourceParseable (dummyElem :: b) datapath parser
 
-    parseResource parser binData =
-        case ( isResourceParseable (dummyElem :: a) parser
-             , isResourceParseable (dummyElem :: b) parser) of
-            (True, _) -> UnionLeft <$> parseResource parser binData
-            (_   , _) -> UnionRight <$> parseResource parser binData
+    parseResource datapath parser binData =
+        case ( isResourceParseable (dummyElem :: a) datapath parser
+             , isResourceParseable (dummyElem :: b) datapath parser) of
+            (True, _) -> UnionLeft <$> parseResource datapath parser binData
+            (_   , _) -> UnionRight <$> parseResource datapath parser binData
 
 instance (PartialGraph a ResourcePath, PartialGraph b ResourcePath)
         => GraphWalker (UnionNode a b) ResourcePath where
@@ -90,14 +90,14 @@ parseUnion Nothing datapath binaryData =
 
 parseUnion (Just parser) datapath binaryData =
     let binaryContent = DataBlob datapath binaryData
-    in case ( isResourceParseable (dummyElem :: a) parser
-            , isResourceParseable (dummyElem :: b) parser ) of
+    in case ( isResourceParseable (dummyElem :: a) datapath parser
+            , isResourceParseable (dummyElem :: b) datapath parser ) of
          (True,    _) -> maybe (return binaryContent)
                                (return . Result datapath . UnionLeft) 
-                               $ parseResource parser binaryData
+                               $ parseResource datapath parser binaryData
          (   _, True) -> maybe (return binaryContent)
                                (return . Result datapath . UnionRight)
-                               $ parseResource parser binaryData
+                               $ parseResource datapath parser binaryData
          _            -> return binaryContent
 
 

@@ -20,9 +20,11 @@ import System.Exit
 
 import Webrexp.Exprtypes
 import Webrexp.Parser( webRexpParser )
+
 import Webrexp.HaXmlNode
 import Webrexp.JsonNode
 import Webrexp.UnionNode
+import Webrexp.DirectoryNode
 
 import Webrexp.ResourcePath
 import Webrexp.WebContext
@@ -54,8 +56,17 @@ defaultConf = Conf
     , depthEvaluation = True
     }
 
-type Crawled a = WebCrawler (UnionNode HaXmLNode JsonNode)
-                            ResourcePath a
+type CrawledNode =
+    UnionNode HaXmLNode
+             (UnionNode JsonNode DirectoryNode)
+
+type Crawled a =
+            WebCrawler CrawledNode ResourcePath a
+
+initialState :: IO (EvalState CrawledNode ResourcePath)
+initialState = do
+    node <- currentDirectoryNode 
+    return . Node . UnionRight $ UnionRight node
 
 -- | Prepare a webrexp.
 -- This function is useful if the expression has
@@ -71,15 +82,15 @@ parseWebRexp str =
 -- many times.
 evalParsedWebRexp :: WebRexp -> IO Bool
 evalParsedWebRexp wexpr = evalWithEmptyContext crawled
- where crawled :: Crawled Bool = evalBreadthFirst wexpr
+ where crawled :: Crawled Bool = evalBreadthFirst (Text "") wexpr
 
 -- | Simple evaluation function, evaluation is
 -- the breadth first type.
 evalWebRexp :: String -> IO Bool
-evalWebRexp = evalWebRexpWithEvaluator evalBreadthFirst
+evalWebRexp = evalWebRexpWithEvaluator $ evalBreadthFirst (Text "")
 
 evalWebRexpDepthFirst :: String -> IO Bool
-evalWebRexpDepthFirst = evalWebRexpWithEvaluator evalDepthFirst 
+evalWebRexpDepthFirst = evalWebRexpWithEvaluator $ evalDepthFirst (Text "")
 
 -- | Simplest function to eval a webrexp.
 -- Return the evaluation status of the webrexp,
@@ -117,8 +128,8 @@ evalWebRexpWithConf conf =
               when (quiet conf) (setLogLevel Quiet)
               when (verbose conf) (setLogLevel Verbose)
               if depthEvaluation conf
-              	 then evalDepthFirst wexpr
-              	 else evalBreadthFirst wexpr
+              	 then evalDepthFirst initialState wexpr
+              	 else evalBreadthFirst initialState wexpr
 
         rez <- evalWithEmptyContext crawled
 

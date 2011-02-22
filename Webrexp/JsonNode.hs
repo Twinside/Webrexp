@@ -23,11 +23,11 @@ type JsonNode = (Maybe String, JSValue)
 instance PartialGraph JsonNode ResourcePath where
     dummyElem = undefined
 
-    isResourceParseable _ ParseableJson = True
-    isResourceParseable _ _ = False
+    isResourceParseable _ _ ParseableJson = True
+    isResourceParseable _ _ _ = False
 
-    parseResource ParseableJson binData = (,) Nothing <$> readJSON binData
-    parseResource _ _ = error "Wrong kind of parser used"
+    parseResource _ ParseableJson binData = (,) Nothing <$> readJSON binData
+    parseResource _ _ _ = error "Wrong kind of parser used"
 
 instance GraphWalker JsonNode ResourcePath where
     accessGraph = loadJson
