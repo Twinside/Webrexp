@@ -50,6 +50,8 @@ instance GraphWalker JsonNode ResourcePath where
         catMaybes [ attribOf "href" n >>= importPath
                   , attribOf "src" n >>= importPath ]
 
+    isHistoryMutable _ = False
+
     valueOf (_, JSString s) = B.unpack s
     valueOf (_, JSNumber i) = show i
     valueOf (_, JSBool b) = show b

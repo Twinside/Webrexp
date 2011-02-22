@@ -14,6 +14,7 @@ module Webrexp (
                ) where
 
 import Control.Monad
+import Control.Monad.IO.Class
 import Text.Parsec
 import System.IO
 import System.Exit
@@ -66,7 +67,7 @@ type Crawled a =
 initialState :: IO (EvalState CrawledNode ResourcePath)
 initialState = do
     node <- currentDirectoryNode 
-    return . Node . UnionRight $ UnionRight node
+    return . Node $ repurposeNode (UnionRight . UnionRight) node
 
 -- | Prepare a webrexp.
 -- This function is useful if the expression has
@@ -127,9 +128,10 @@ evalWebRexpWithConf conf =
               setHttpDelay $ hammeringDelay conf
               when (quiet conf) (setLogLevel Quiet)
               when (verbose conf) (setLogLevel Verbose)
+              initState <- liftIO $ initialState
               if depthEvaluation conf
-              	 then evalDepthFirst initialState wexpr
-              	 else evalBreadthFirst initialState wexpr
+              	 then evalDepthFirst initState wexpr
+              	 else evalBreadthFirst initState wexpr
 
         rez <- evalWithEmptyContext crawled
 

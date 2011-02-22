@@ -77,7 +77,7 @@ data AccessResult a rezPath =
 -- the logic should use this interface.
 --
 -- Minimal implementation : everything.
-class (GraphPath rezPath)
+class (GraphPath rezPath, Eq a)
         => GraphWalker a rezPath | a -> rezPath where
     -- | Get back an attribute of the node
     -- if it exists
@@ -106,6 +106,12 @@ class (GraphPath rezPath)
     -- the second is to log errors
     accessGraph :: (MonadIO m)
                 => Loggers -> rezPath -> m (AccessResult a rezPath)
+
+    -- | Tell if the history associated is fixed or not.
+    -- If the history is not fixed and can change (if you
+    -- are querying the filesystem for example, it should
+    -- return False)
+    isHistoryMutable :: a -> Bool
 
 -- | Return a list of all the "children"/linked node of a given node.
 -- The given node is not included in the list.

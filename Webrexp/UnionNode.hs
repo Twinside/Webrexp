@@ -38,6 +38,7 @@ class (GraphWalker a rezPath) => PartialGraph a rezPath where
 -- | Data type which is an instance of graphwalker.
 -- Use it to combine two other node types.
 data UnionNode a b = UnionLeft a | UnionRight b
+        deriving Eq
 
 -- | Allow recursion of union node, so a tree of multidomain
 -- node can be built.
@@ -78,6 +79,9 @@ instance (PartialGraph a ResourcePath, PartialGraph b ResourcePath)
     indirectLinks (UnionRight a) = indirectLinks a
 
     accessGraph = loadData
+
+    isHistoryMutable (UnionLeft a) = isHistoryMutable a
+    isHistoryMutable (UnionRight a) = isHistoryMutable a
 
 parseUnion :: forall a b m.
               ( MonadIO m

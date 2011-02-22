@@ -54,6 +54,8 @@ instance GraphWalker HaXmLNode ResourcePath where
         catMaybes [ attribOf "href" n >>= importPath
                   , attribOf "src" n >>= importPath ]
 
+    isHistoryMutable _ = False
+
     valueOf (CString _ sdata _) = sdata
     valueOf a = case pureChildren a of
        (CString _ txt _:_) -> txt

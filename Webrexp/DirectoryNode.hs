@@ -92,6 +92,8 @@ instance GraphWalker DirectoryNode ResourcePath where
 
     accessGraph _ _ = return AccessError
 
+    isHistoryMutable _ = True
+
     childrenOf (File _ _) = return []
     childrenOf (Directory path _) = liftIO $ listDirectory path
 

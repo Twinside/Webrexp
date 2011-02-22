@@ -30,7 +30,7 @@ searchRefIn :: (GraphWalker node rezPath)
 searchRefIn False Wildcard n = do
     children <- childrenOf $ this n
     return [ NodeContext {
-        parents = (this n, idx) : parents n,
+        parents = (this n, idx) ^: parents n,
         this = sub,
         rootRef = rootRef n
      } | (sub, idx) <- zip children [0..]]
@@ -38,7 +38,7 @@ searchRefIn False Wildcard n = do
 searchRefIn True Wildcard n = do
     subs <- descendants $ this n
     return [ NodeContext {
-        parents = subP ++ parents n,
+        parents = subP ^+ parents n,
         this = sub,
         rootRef = rootRef n
     }  | (sub, subP) <- subs ]
@@ -46,7 +46,7 @@ searchRefIn True Wildcard n = do
 searchRefIn True (Elem s) n = do
     subs <- findNamed s $ this n
     return [ NodeContext {
-        parents = subP ++ parents n,
+        parents = subP ^+ parents n,
         this = sub,
         rootRef = rootRef n
     }  | (sub, subP) <- subs ]
@@ -147,8 +147,13 @@ evalWebRexpFor PreviousSibling e = do
 evalWebRexpFor Parent (Node e) = do
   debugLog "> '<'"
   case parents e of
-      []       -> return (False, [])
-      (n,_):ps -> return (True, [Node $ e { parents = ps, this = n }])
+      ImmutableHistory [] -> return (False, [])
+      MutableHistory   [] -> return (False, [])
+      ImmutableHistory ((n,_):ps) ->
+          return (True, [Node $ e { parents = ImmutableHistory ps, this = n }])
+      MutableHistory (n:ps) ->
+          return (True, [Node $ e { parents = MutableHistory ps, this = n }])
+
 evalWebRexpFor Parent _ = return (False, [])
 
 -- Exaustive definition to get better warning from compiler in case
@@ -178,9 +183,12 @@ downLinks path = do
          AccessError -> return []
          DataBlob u b -> return [Blob $ BinBlob u b]
          Result u n -> return [Node 
-                    NodeContext { parents = []
-                                 , rootRef = u
-                                 , this = n }]
+                    NodeContext { parents = hist
+                                , rootRef = u
+                                , this = n }]
+                     where hist = if isHistoryMutable n
+                                    then MutableHistory []
+                                    else ImmutableHistory []
 
 --------------------------------------------------
 ----            Helper functions
@@ -205,18 +213,30 @@ siblingAccessor :: (GraphWalker node rezPath)
 siblingAccessor 0   node@(Node _) = return $ Just node
 siblingAccessor idx (Node node)=
     case parents node of
-      [] -> return Nothing
-      (n,i):ps -> do
+      ImmutableHistory [] -> return Nothing
+      MutableHistory [] -> return Nothing
+      ImmutableHistory ((n,i):ps) -> do
           children <- childrenOf n
           let childrenCount = length children
               neoIndex = i + idx
           if neoIndex < 0 || neoIndex >= childrenCount
                 then return Nothing
                 else return . Just . Node $ NodeContext
-                        { parents = (n, neoIndex):ps
+                        { parents = ImmutableHistory $ (n, neoIndex):ps
                         , this = children !! neoIndex
                         , rootRef = rootRef node
                         }
+      MutableHistory (n:_) -> do
+          children <- childrenOf n
+          let childrenCount = length children
+          case elemIndex (this node) children of
+            Nothing -> error "Sibling access - root file removed"
+            Just i ->
+                let neoIndex = i + idx
+                in if neoIndex < 0 || neoIndex >= childrenCount
+                    then return Nothing
+                    else return . Just . Node $ node
+                        { this = children !! neoIndex }
 siblingAccessor _ _ = return Nothing
 
 --------------------------------------------------

@@ -21,6 +21,10 @@ module Webrexp.WebContext
     , ValidSeenCounter
     , StateNumber
 
+    -- * Node manipulation function/operators
+    , (^:)
+    , (^+)
+
     -- * Crawling configuration
     , LogLevel (..)
     , setLogLevel 
@@ -97,6 +101,18 @@ data HistoryPath node =
       -- feets, we have to search again for the position
       -- of the node in the parent node.
     | MutableHistory   [node]
+
+-- | Fuse two history together, is equivalent to the '++'
+-- operator for list.
+(^+) :: [(node, Int)] -> HistoryPath node -> HistoryPath node
+(^+) nodes (MutableHistory hist) = MutableHistory $ map fst nodes ++ hist
+(^+) nodes (ImmutableHistory hist) = ImmutableHistory $ nodes ++ hist
+
+-- | Append at info at the beginning of an history,
+-- equivalent to the ':' operator for lists.
+(^:) :: (node, Int) -> HistoryPath node -> HistoryPath node
+(^:) (node, _) (MutableHistory hist) = MutableHistory $ node : hist
+(^:) node (ImmutableHistory hist) = ImmutableHistory $ node : hist
 
 -- | Represent a graph node and the path
 -- used to go up to it.
