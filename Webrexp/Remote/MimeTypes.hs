@@ -34,7 +34,7 @@ findContentTypeOf = fst . break (';' ==)
 -- | Associate extension to parser, used for local file type
 -- recognition.
 fileExtension :: Map.Map String ParseableType
-fileExtension = Map.fromList $
+fileExtension = Map.fromList
     [('.' : ext, v) | (ext, Just v) <- Map.elems mimeExtension]
 
 -- | Given a MimeType, return the kind of parser to use

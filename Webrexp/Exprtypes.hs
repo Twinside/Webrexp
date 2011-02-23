@@ -8,6 +8,7 @@ module Webrexp.Exprtypes
     , ActionExpr (..)
     , WebRexp (..)
     , RepeatCount  (..)
+    , BuiltinFunc (..)
     -- * Functions
     -- ** Transformations
     , simplifyNodeRanges 
@@ -115,6 +116,17 @@ data Op =
     | OpHyphenBegin -- ^ \'|=\' op beginning, as the CSS3 operator.
     deriving (Eq, Show)
 
+-- | Type used to index built-in functions 
+-- in actions.
+data BuiltinFunc =
+      BuiltinTrim
+    | BuiltinSubsitute
+    | BuiltinToNum
+    | BuiltinToString
+    | BuiltinFormat
+    | BuiltinSystem
+    deriving (Eq, Show)
+
 -- | Represent an action Each production
 -- of the grammar more or less map to a
 -- data constructor of this type.
@@ -144,7 +156,10 @@ data ActionExpr =
     -- | the '.' action. Dump the content of
     -- the current element.
     | OutputAction
-    deriving (Show)
+
+    -- | funcName(..., ...)
+    | Call BuiltinFunc [ActionExpr]
+    deriving (Eq, Show)
 
 data RepeatCount =
       RepeatTimes Int

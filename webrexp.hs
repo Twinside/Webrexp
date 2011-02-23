@@ -128,7 +128,7 @@ evalWebRexpWithConf conf =
               setHttpDelay $ hammeringDelay conf
               when (quiet conf) (setLogLevel Quiet)
               when (verbose conf) (setLogLevel Verbose)
-              initState <- liftIO $ initialState
+              initState <- liftIO initialState
               if depthEvaluation conf
               	 then evalDepthFirst initState wexpr
               	 else evalBreadthFirst initState wexpr

@@ -4,6 +4,7 @@ module Webrexp.Parser( webRexpParser ) where
 
 import Control.Applicative( (<$>), (<$), (<*>) )
 import Control.Monad.Identity
+import qualified Data.Map as Map
 
 import Webrexp.Exprtypes
 
@@ -90,6 +91,16 @@ operatorDefs =
     , [prefix "$" NodeReplace]
     ]
 
+functionMap :: Map.Map String BuiltinFunc
+functionMap = Map.fromList
+    [ ("trim"   , BuiltinTrim)
+    , ("replace", BuiltinSubsitute)
+    , ("to_num" , BuiltinToNum)
+    , ("to_str" , BuiltinToString)
+    , ("format" , BuiltinFormat)
+    , ("sys"    , BuiltinSystem)
+    ]
+
 
 -- | Parse some range
 noderange :: Parsed st NodeRange
@@ -158,12 +169,23 @@ webref = do
         next <- webident
         return $ op initial next) <|> return initial
 
+actionCall :: Parsed st ActionExpr
+actionCall = do
+    ident <- webident
+    (char '(' >> funParser ident) <|> return (ARef ident)
+        where funParser ident = do
+                  args <- sepBy1 actionExpr (spaceSurrounded $ char ',')
+                  _ <- whiteSpace >> char ')'
+                  case Map.lookup ident functionMap of
+                     Nothing -> error $ "Unknown function " ++ ident
+                     Just b -> return $ Call b args
+
 actionTerm :: Parsed st ActionExpr
 actionTerm = (CstI . fromIntegral <$> natural)
           <|> parens actionExpr
           <|> (CstS <$> stringLiteral)
           <|> (OutputAction <$ char '.')
-          <|> (ARef <$> webident)
+          <|> actionCall
           <?> "actionTerm"
 
 actionExpr :: Parsed st ActionExpr
