@@ -114,7 +114,7 @@ data Op =
     | OpEnd       -- ^ \'$=\' op beginning, as the CSS3 operator.
     | OpSubstring -- ^ \'^=\' op beginning, as the CSS3 operator.
     | OpHyphenBegin -- ^ \'|=\' op beginning, as the CSS3 operator.
-    deriving (Eq, Show)
+    deriving (Eq, Show, Enum)
 
 -- | Type used to index built-in functions 
 -- in actions.
@@ -125,7 +125,7 @@ data BuiltinFunc =
     | BuiltinToString
     | BuiltinFormat
     | BuiltinSystem
-    deriving (Eq, Show)
+    deriving (Eq, Show, Enum)
 
 -- | Represent an action Each production
 -- of the grammar more or less map to a

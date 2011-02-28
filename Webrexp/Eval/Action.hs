@@ -1,6 +1,7 @@
-module Webrexp.Eval.Action where
+module Webrexp.Eval.Action( evalAction 
+                          , dumpActionVal
+                          , isActionResultValid ) where
 
-import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class
 import Data.List
@@ -9,18 +10,10 @@ import Text.Regex.PCRE
 import Webrexp.GraphWalker
 import Webrexp.Exprtypes
 import Webrexp.WebContext
+import Webrexp.Eval.ActionFunc
 
 import Webrexp.Log
 import qualified Webrexp.ProjectByteString as B
-
--- | Data used for the evaluation of actions. Represent the
--- whole set of representable data at runtime.
-data ActionValue =
-      AInt    Int
-    | ABool   Bool
-    | AString String
-    | ATypeError
-    deriving (Show)
 
 binArith :: (GraphWalker node rezPath)
          => (ActionValue -> ActionValue -> ActionValue) -- ^ Function to cal result
@@ -163,24 +156,37 @@ evalAction (BinOp OpSubstring a b) e =
     binArith (stringPredicate $ flip isInfixOf) e a b
 
 
-evalAction (Call BuiltinTrim subs) e = actionFunEval stringTrim subs e
-    where stringTrim _ _ = (ATypeError, Nothing)
-{-evalAction (Call BuiltinSubsitute subs) e =-}
-{-evalAction (Call BuiltinToNum subs) e =-}
-{-evalAction (Call BuiltinToString subs) e =-}
-{-evalAction (Call BuiltinFormat subs) e =-}
-{-evalAction (Call BuiltinSystem subs) e =-}
+-- We list every possibility for now to be sure to implement
+-- everything.
+evalAction (Call BuiltinToNum subs) e = actionFunEval toNum subs e
+evalAction (Call BuiltinToString subs) e = actionFunEval funToString subs e
+evalAction (Call BuiltinTrim subs) e = actionFunEval trimString subs e
+evalAction (Call BuiltinFormat subs) e = actionFunEval formatString subs e
+evalAction (Call BuiltinSubsitute subs) e = actionFunEval substituteFunc subs e
+evalAction (Call BuiltinSystem subs) e = actionFunEvalM funcSysCall subs e
 
 actionFunEval :: (GraphWalker node rezPath)
-              => ([ActionValue] -> Maybe (EvalState node rezPath)
-                                -> (ActionValue, Maybe (EvalState node rezPath)))
-              -> [ActionExpr]
-              -> Maybe (EvalState node rezPath)
+              => ActionFunc node rezPath
+              -> [ActionExpr] -> Maybe (EvalState node rezPath)
               -> WebCrawler node rezPath
                           (ActionValue, Maybe (EvalState node rezPath))
-actionFunEval f actions st = do
+actionFunEval f actions st =  do
     vals <- mapM (\a -> evalAction a st) actions
     let values = map fst vals
     if all isActionResultValid values
        then return $ f values st
        else return (ATypeError, Nothing)
+
+
+actionFunEvalM :: (GraphWalker node rezPath)
+               => ActionFuncM node rezPath
+               -> [ActionExpr] -> Maybe (EvalState node rezPath)
+               -> WebCrawler node rezPath
+                          (ActionValue, Maybe (EvalState node rezPath))
+actionFunEvalM f actions st = do
+    vals <- mapM (\a -> evalAction a st) actions
+    let values = map fst vals
+    if all isActionResultValid values
+       then f values st
+       else return (ATypeError, Nothing)
+
