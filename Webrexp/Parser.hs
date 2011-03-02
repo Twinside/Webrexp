@@ -69,7 +69,8 @@ operatorDefs =
     [ [binary "/" (BinOp OpDiv) AssocLeft
       ,binary "*" (BinOp OpMul) AssocLeft]
     , [binary "+" (BinOp OpAdd) AssocLeft
-      ,binary "-" (BinOp OpSub) AssocLeft]
+      ,binary "-" (BinOp OpSub) AssocLeft
+      ,binary ":" (BinOp OpConcat) AssocLeft]
     , [binary "=" (BinOp OpEq)  AssocRight
       ,binary "!=" (BinOp OpNe) AssocLeft
       ,binary "=~" (BinOp OpMatch) AssocLeft

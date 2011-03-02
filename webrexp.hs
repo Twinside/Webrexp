@@ -122,6 +122,8 @@ evalWebRexpWithConf conf =
                  dumpAutomata (expr conf) stdout $ buildAutomata packed
                  exitWith ExitSuccess)
 
+        when (verbose conf) (print wexpr)
+
         let crawled :: Crawled Bool = do
               setUserAgent $ userAgent conf
               setOutput $ output conf

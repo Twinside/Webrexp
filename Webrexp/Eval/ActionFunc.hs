@@ -18,6 +18,8 @@ import Data.Char
 import System.Process
 import System.Exit
 
+import Debug.Trace
+
 import Webrexp.WebContext
 
 -- | Data used for the evaluation of actions. Represent the
@@ -27,7 +29,7 @@ data ActionValue =
     | ABool   Bool
     | AString String
     | ATypeError
-    deriving (Show)
+    deriving (Eq, Show)
 
 -- | Type used to describe evaluator for function inside
 -- webrexp actions.
@@ -61,9 +63,9 @@ toString (AInt i) = show i
 toString ATypeError = "ATypeError"
 
 funToString :: ActionFunc node rezPath
-funToString [ATypeError] a = (ATypeError, a)
+funToString [ATypeError] a = trace "FUCK" (ATypeError, a)
 funToString [v] a = (AString $ toString v, a)
-funToString _ a = (ATypeError, a)
+funToString b a = trace (show b) $ (ATypeError, a)
 
 
 -- | Remove blank space before and after a string

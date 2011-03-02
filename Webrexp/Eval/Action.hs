@@ -34,6 +34,11 @@ intOnly :: (Int -> Int -> Int) -> ActionValue -> ActionValue -> ActionValue
 intOnly f (AInt a) (AInt b) = AInt $ f a b
 intOnly _ _ _ = ATypeError
 
+stringOnly :: (String -> String -> String) -> ActionValue -> ActionValue
+           -> ActionValue
+stringOnly f (AString a) (AString b) = AString $ f a b
+stringOnly _ _ _ = ATypeError
+
 stringPredicate :: (String -> String -> Bool) -> ActionValue 
                 -> ActionValue -> ActionValue
 stringPredicate f (AString a) (AString b) = ABool $ f a b
@@ -92,9 +97,16 @@ evalAction :: (GraphWalker node rezPath)
            -> Maybe (EvalState node rezPath)
            -> WebCrawler node rezPath
                         (ActionValue, Maybe (EvalState node rezPath))
-evalAction (ActionExprs actions) e = foldM eval (ABool True, e) actions
-    where eval v@(ABool False, _) _ = return v
-          eval v@(ATypeError, _) _ = return v
+evalAction (ActionExprs actions) e = do
+    rez <- foldM eval (ABool True, e) actions
+    debugLog $ "\t>" ++ show (fst rez)
+    return rez
+    where eval v@(ABool False, _) _ = do
+              debugLog $ "\t|False"
+              return v
+          eval v@(ATypeError, _) _ = do
+              debugLog $ "\t|ATypeError"
+              return v
           eval (actionVal, el) act = do
               debugLog $ "\t>" ++ show actionVal
               dumpActionVal actionVal
@@ -141,6 +153,7 @@ evalAction (BinOp OpNe a b) e = binArith (\a' b' -> valNot $ binComp a' b') e a 
 
 evalAction (BinOp OpAnd a b) e = binArith (boolComp (&&)) e a b
 evalAction (BinOp OpOr  a b) e = binArith (boolComp (||)) e a b
+evalAction (BinOp OpConcat a b) e = binArith (stringOnly (++)) e a b
 
 evalAction (BinOp OpContain a b) e =
     binArith (stringPredicate contain) e a b
@@ -173,7 +186,7 @@ actionFunEval :: (GraphWalker node rezPath)
 actionFunEval f actions st =  do
     vals <- mapM (\a -> evalAction a st) actions
     let values = map fst vals
-    if all isActionResultValid values
+    if all (/= ATypeError) values
        then return $ f values st
        else return (ATypeError, Nothing)
 
@@ -186,7 +199,7 @@ actionFunEvalM :: (GraphWalker node rezPath)
 actionFunEvalM f actions st = do
     vals <- mapM (\a -> evalAction a st) actions
     let values = map fst vals
-    if all isActionResultValid values
+    if all (/= ATypeError) values
        then f values st
        else return (ATypeError, Nothing)
 

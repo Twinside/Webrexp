@@ -1,0 +1,4 @@
+[to_num("15") + 3; "\n"]
+    ([to_num("ab"); "bad\n"] | ["ok\n"])
+    ([to_num("a3"); "bad\n"] | ["ok\n"])
+    ([to_num("3b"); "bad\n"] | ["ok\n"])

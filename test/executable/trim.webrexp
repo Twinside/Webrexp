@@ -1,0 +1,4 @@
+[trim("   da \t"); "\n"
+;trim("funk      ponk ponk");"\n"
+;trim("\t\tfunk      ponk ponk");"\n"
+]

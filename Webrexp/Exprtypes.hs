@@ -114,6 +114,8 @@ data Op =
     | OpEnd       -- ^ \'$=\' op beginning, as the CSS3 operator.
     | OpSubstring -- ^ \'^=\' op beginning, as the CSS3 operator.
     | OpHyphenBegin -- ^ \'|=\' op beginning, as the CSS3 operator.
+
+    | OpConcat -- ^ \':\' concatenate two strings
     deriving (Eq, Show, Enum)
 
 -- | Type used to index built-in functions 
