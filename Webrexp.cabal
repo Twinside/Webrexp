@@ -1,16 +1,26 @@
 Name:       Webrexp
-Version:    0.1
+Version:    1.0
 Synopsis:   Regexp-like engine to scrap web data
 Build-Type: Simple
+License:    BSD3
 Cabal-Version: >= 1.8
-Description: The intent of this project is to provide a DSL (just an expression language) to be able to write one-liner to scrap web data
+Description: A web scrapping utility mixing CSS selector syntax and regular expressions
+Category:    Utility
 Author: Vincent Berthoux
-Maintainer: Vincent Berthoux
+Maintainer: Vincent Berthoux (twinside@gmail.com)
+
+Flag optimize
+    Description: turn on optimisation
+    Default: False
 
 Executable webrexp
   Main-Is: webrexpMain.hs
-  Ghc-Options: -Wall -prof -auto-all
-  Build-Depends: base >= 2.0, mtl,
+  Ghc-Options: -Wall
+
+  if flag(optimize)
+      Ghc-options:-O3
+
+  Build-Depends: base >= 2.0 && < 5.0, mtl,
                  HTTP >= 4000.1.1 && < 4000.2,
                  parsec >= 3.1 && < 3.2,
                  transformers >= 0.2.2 && < 0.3,
@@ -26,6 +36,7 @@ Executable webrexp
                  filepath
                  -- Webrexp
 
+
 Library
   Ghc-Options: -Wall
   Exposed-Modules: Webrexp,
@@ -34,7 +45,21 @@ Library
                    Webrexp.Exprtypes,
                    Webrexp.GraphWalker,
                    Webrexp.ResourcePath
-  Build-Depends: base >= 2.0, mtl,
+
+  Other-Modules:
+            Webrexp.DirectoryNode
+            Webrexp.Eval.Action
+            Webrexp.Eval.ActionFunc
+            Webrexp.HaXmlNode
+            Webrexp.JsonNode
+            Webrexp.Log
+            Webrexp.ProjectByteString
+            Webrexp.Remote.MimeTypes
+            Webrexp.UnionNode
+            Webrexp.WebContext
+            Webrexp.WebRexpAutomata
+
+  Build-Depends: base >= 2.0 && < 5.0, mtl,
                  HTTP >= 4000.1.1 && < 4000.2,
                  HaXml >= 1.20 && < 1.30,
                  parsec >= 3.1 && < 3.2,

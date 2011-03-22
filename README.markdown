@@ -15,6 +15,10 @@ And another one to dump all the images from a webpage
 
     webrexp '"http://someurl.com" >> img [.]'
 
+Hackage
+-------
+Haskell users can directly grab releases on [Hackage](http://hackage.haskell.org/package/Webrexp).
+
 Building
 --------
 To build the webrexp project you must have GHC (Glasgow Haskell Compiler) installed and some cabal package. To know which package your are missing, in the source folder type :

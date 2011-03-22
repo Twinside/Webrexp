@@ -18,6 +18,9 @@ data Flag = Verbose
           | Delay Int
           deriving Eq
 
+version :: String
+version = "1.0"
+
 options :: [OptDescr Flag]
 options =
     [ Option "o"  ["output"] (ReqArg Output "FILE") "output FILE"
@@ -66,7 +69,7 @@ mainProgram = do
     args <- getArgs
     c <- parseArgs args
     if showHelp c
-       then do putStrLn $ usageInfo "Webrexp" options
+       then do putStrLn $ usageInfo ("Webrexp v" ++ version) options
                exitWith ExitSuccess
 
        else do valid <- evalWebRexpWithConf c
