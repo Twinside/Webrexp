@@ -6,7 +6,8 @@ between each others, using a syntax similar to regexp.
 
 Using
 -----
-For tutorial and examples, please see the project's [wiki](https://github.com/Twinside/Webrexp/wiki/Webrexp). 
+For tutorial and examples, please see the project's [Documentation page](http://twinside.free.fr/webrexp/)
+or [wiki](https://github.com/Twinside/Webrexp/wiki/Webrexp).
 As a teasing, here is some samples for a tiny command line for listing a RSS stream's title :
 
     webrexp '"http://someurl.com" >> item title [.]'
