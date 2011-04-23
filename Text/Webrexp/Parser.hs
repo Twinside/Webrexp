@@ -1,12 +1,12 @@
 -- | Module implementing the parsing of webrexp.
 -- It shouldn't be used directly.
-module Webrexp.Parser( webRexpParser ) where
+module Text.Webrexp.Parser( webRexpParser ) where
 
 import Control.Applicative( (<$>), (<$), (<*>) )
 import Control.Monad.Identity
 import qualified Data.Map as Map
 
-import Webrexp.Exprtypes
+import Text.Webrexp.Exprtypes
 
 import Text.Parsec.Expr
 import Text.Parsec

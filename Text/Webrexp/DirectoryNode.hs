@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-module Webrexp.DirectoryNode( DirectoryNode
+module Text.Webrexp.DirectoryNode( DirectoryNode
                             , toDirectoryNode
                             , currentDirectoryNode
                             ) where
@@ -10,10 +10,10 @@ import Control.Monad.IO.Class
 import System.Directory
 import System.FilePath
 
-import Webrexp.GraphWalker
-import Webrexp.ResourcePath
-import Webrexp.UnionNode
-import Webrexp.WebContext
+import Text.Webrexp.GraphWalker
+import Text.Webrexp.ResourcePath
+import Text.Webrexp.UnionNode
+import Text.Webrexp.WebContext
 
 type FileName = String
 

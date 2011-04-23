@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Webrexp.Eval
+module Text.Webrexp.Eval
     (
     -- * Functions
     evalAction,
@@ -10,11 +10,11 @@ import Control.Applicative
 import Control.Monad
 import Data.List
 
-import Webrexp.GraphWalker
-import Webrexp.Exprtypes
-import Webrexp.WebContext
-import Webrexp.Eval.Action
-import Webrexp.Log
+import Text.Webrexp.GraphWalker
+import Text.Webrexp.Exprtypes
+import Text.Webrexp.WebContext
+import Text.Webrexp.Eval.Action
+import Text.Webrexp.Log
 
 -- | Given a node search for valid children, check for their
 -- validity against the requirement.

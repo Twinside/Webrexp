@@ -8,17 +8,17 @@
 -- | This module has for aim to create new node type by combining
 -- different GraphWalkers. The idea is to be able to walk from an
 -- XML file to a Json file and so forth.
-module Webrexp.UnionNode( PartialGraph( .. ), UnionNode ( .. ) ) where
+module Text.Webrexp.UnionNode( PartialGraph( .. ), UnionNode ( .. ) ) where
 
 import Control.Applicative
 import Control.Monad.IO.Class
 import Network.HTTP
 import System.Directory
 
-import Webrexp.GraphWalker
-import Webrexp.Remote.MimeTypes
-import Webrexp.ResourcePath
-import qualified Webrexp.ProjectByteString as B
+import Text.Webrexp.GraphWalker
+import Text.Webrexp.Remote.MimeTypes
+import Text.Webrexp.ResourcePath
+import qualified Text.Webrexp.ProjectByteString as B
 
 -- | Extension of GraphWalker class to be able to query the type
 -- about it's possibility of parsing. Very ad-hoc.

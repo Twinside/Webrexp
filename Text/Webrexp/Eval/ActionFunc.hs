@@ -1,5 +1,5 @@
 {-# LANGUAGE PatternGuards #-}
-module Webrexp.Eval.ActionFunc( ActionValue(..)
+module Text.Webrexp.Eval.ActionFunc( ActionValue(..)
                               , ActionFunc
                               , ActionFuncM
                               , toNum 
@@ -20,7 +20,7 @@ import System.Exit
 
 import Debug.Trace
 
-import Webrexp.WebContext
+import Text.Webrexp.WebContext
 
 -- | Data used for the evaluation of actions. Represent the
 -- whole set of representable data at runtime.

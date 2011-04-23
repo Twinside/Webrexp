@@ -1,13 +1,13 @@
 -- | Module implementing plumbing to get a unified path locator,
 -- handling URI & local path. Implement the 'GraphPath' and 'GraphWalker'
 -- typeclass with 'HxtNode'
-module Webrexp.ResourcePath 
+module Text.Webrexp.ResourcePath 
     ( ResourcePath (..)
     , rezPathToString
     , downloadBinary
     ) where
 
-import Webrexp.GraphWalker
+import Text.Webrexp.GraphWalker
 import Control.Applicative
 import Control.Monad.IO.Class
 import Data.Maybe
@@ -16,9 +16,9 @@ import Network.Browser
 import Network.URI
 import System.Directory
 import System.FilePath
-import qualified Webrexp.ProjectByteString as B
+import qualified Text.Webrexp.ProjectByteString as B
 
-import Webrexp.Remote.MimeTypes
+import Text.Webrexp.Remote.MimeTypes
 
 -- | Main data type
 data ResourcePath =

@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 -- | Generic module for using Webrexp as a user.
-module Webrexp ( 
+module Text.Webrexp ( 
                -- * Default evaluation
                  evalWebRexp
                , evalWebRexpDepthFirst 
@@ -19,18 +19,18 @@ import Text.Parsec
 import System.IO
 import System.Exit
 
-import Webrexp.Exprtypes
-import Webrexp.Parser( webRexpParser )
+import Text.Webrexp.Exprtypes
+import Text.Webrexp.Parser( webRexpParser )
 
-import Webrexp.HaXmlNode
-import Webrexp.JsonNode
-import Webrexp.UnionNode
-import Webrexp.DirectoryNode
+import Text.Webrexp.HaXmlNode
+import Text.Webrexp.JsonNode
+import Text.Webrexp.UnionNode
+import Text.Webrexp.DirectoryNode
 
-import Webrexp.ResourcePath
-import Webrexp.WebContext
+import Text.Webrexp.ResourcePath
+import Text.Webrexp.WebContext
 
-import Webrexp.WebRexpAutomata
+import Text.Webrexp.WebRexpAutomata
 
 data Conf = Conf
     { hammeringDelay :: Int

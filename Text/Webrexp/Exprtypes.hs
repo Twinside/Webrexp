@@ -1,5 +1,5 @@
 -- | Datatypes used to describe webrexps, and some helper functions.
-module Webrexp.Exprtypes
+module Text.Webrexp.Exprtypes
     ( 
     -- * Types
       WebRef (..)

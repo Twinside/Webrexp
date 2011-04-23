@@ -2,7 +2,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 -- | This module store the interface between the evaluator
 -- and the manipulated graph.
-module Webrexp.GraphWalker
+module Text.Webrexp.GraphWalker
     ( 
     -- * Classes
       GraphWalker(..)
@@ -22,7 +22,7 @@ module Webrexp.GraphWalker
 
 import Control.Applicative
 import Control.Monad.IO.Class
-import qualified Webrexp.ProjectByteString as B
+import qualified Text.Webrexp.ProjectByteString as B
 
 -- | Represent the path used to find the node
 -- from the starting point of the graph.

@@ -1,4 +1,4 @@
-module Webrexp.WebRexpAutomata ( -- * Types
+module Text.Webrexp.WebRexpAutomata ( -- * Types
                                  Automata
                                , StateIndex
 
@@ -19,11 +19,11 @@ import Data.Array
 import qualified Data.Array.Unboxed as U
 import System.IO
 
-import Webrexp.Log
-import Webrexp.Eval
-import Webrexp.GraphWalker
-import Webrexp.WebContext
-import Webrexp.Exprtypes
+import Text.Webrexp.Log
+import Text.Webrexp.Eval
+import Text.Webrexp.GraphWalker
+import Text.Webrexp.WebContext
+import Text.Webrexp.Exprtypes
 
 type AutomataSink = (Int, Int)
 

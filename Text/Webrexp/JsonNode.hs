@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Webrexp.JsonNode( JsonNode ) where
+module Text.Webrexp.JsonNode( JsonNode ) where
 
 import Control.Arrow
 import Control.Applicative
@@ -12,12 +12,12 @@ import Network.HTTP
 import System.Directory
 import Text.JSON.AttoJSON
 
-import qualified Webrexp.ProjectByteString as B
+import qualified Text.Webrexp.ProjectByteString as B
 
-import Webrexp.GraphWalker
-import Webrexp.ResourcePath
-import Webrexp.UnionNode
-import Webrexp.Remote.MimeTypes
+import Text.Webrexp.GraphWalker
+import Text.Webrexp.ResourcePath
+import Text.Webrexp.UnionNode
+import Text.Webrexp.Remote.MimeTypes
 
 type JsonNode = (Maybe String, JSValue)
 

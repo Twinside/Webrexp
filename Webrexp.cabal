@@ -39,25 +39,25 @@ Executable webrexp
 
 Library
   Ghc-Options: -Wall
-  Exposed-Modules: Webrexp,
-                   Webrexp.Parser,
-                   Webrexp.Eval,
-                   Webrexp.Exprtypes,
-                   Webrexp.GraphWalker,
-                   Webrexp.ResourcePath
+  Exposed-Modules: Text.Webrexp,
+                   Text.Webrexp.Parser,
+                   Text.Webrexp.Eval,
+                   Text.Webrexp.Exprtypes,
+                   Text.Webrexp.GraphWalker,
+                   Text.Webrexp.ResourcePath
 
   Other-Modules:
-            Webrexp.DirectoryNode
-            Webrexp.Eval.Action
-            Webrexp.Eval.ActionFunc
-            Webrexp.HaXmlNode
-            Webrexp.JsonNode
-            Webrexp.Log
-            Webrexp.ProjectByteString
-            Webrexp.Remote.MimeTypes
-            Webrexp.UnionNode
-            Webrexp.WebContext
-            Webrexp.WebRexpAutomata
+            Text.Webrexp.DirectoryNode
+            Text.Webrexp.Eval.Action
+            Text.Webrexp.Eval.ActionFunc
+            Text.Webrexp.HaXmlNode
+            Text.Webrexp.JsonNode
+            Text.Webrexp.Log
+            Text.Webrexp.ProjectByteString
+            Text.Webrexp.Remote.MimeTypes
+            Text.Webrexp.UnionNode
+            Text.Webrexp.WebContext
+            Text.Webrexp.WebRexpAutomata
 
   Build-Depends: base >= 2.0 && < 5.0, mtl,
                  HTTP >= 4000.1.1 && < 4000.2,
