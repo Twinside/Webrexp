@@ -1,3 +1,5 @@
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
 -- | Datatypes used to describe webrexps, and some helper functions.
 module Text.Webrexp.Exprtypes
     ( 
@@ -23,6 +25,7 @@ module Text.Webrexp.Exprtypes
     ) where
 
 import Data.List( sort, mapAccumR )
+import Language.Haskell.TH.Syntax
 
 -- | represent an element
 data WebRef =
@@ -349,3 +352,53 @@ isInNodeRange i (Interval beg end:xs)
     | beg >= i = False
     | otherwise = isInNodeRange i xs
 
+--------------------------------------------------
+----            Quasi quotation instances
+--------------------------------------------------
+instance Lift WebRef where
+    lift Wildcard = [| Wildcard |]
+    lift (Elem str) =  [| Elem str |]
+    lift (OfClass ref str) = [| OfClass ref str |]
+    lift (Attrib ref str) = [| Attrib ref str |]
+    lift (OfName ref str) = [| OfName ref str |]
+
+instance Lift NodeRange  where
+    lift (Index i) = [| Index i |]
+    lift (Interval i1 i2) = [| Interval i1 i2 |]
+
+instance Lift Op where
+    lift = return . ConE . mkName . show
+
+instance Lift BuiltinFunc where
+    lift = return . ConE . mkName . show
+
+instance Lift ActionExpr where
+    lift OutputAction = [| OutputAction |]
+    lift (ActionExprs lst) = [| ActionExprs lst |]
+    lift (ARef str) = [| ARef str |]
+    lift (CstI i) = [| CstI i |]
+    lift (CstS str) = [| CstS str |]
+    lift (NodeReplace a) = [| NodeReplace a |]
+    lift (Call b lst) = [| Call b lst |]
+    lift (BinOp op a1 a2) = [| BinOp op a1 a2 |]
+
+instance Lift RepeatCount where
+    lift (RepeatTimes i) = [| RepeatTimes i |] 
+    lift (RepeatAtLeast i) = [| RepeatAtLeast i |] 
+    lift (RepeatBetween i1 i2) = [| RepeatBetween i1 i2 |]
+
+instance Lift WebRexp where
+    lift (Branch lst) = [| Branch lst |]
+    lift (Unions lst) = [| Unions lst |]
+    lift (List lst) = [| List lst |]
+    lift (Star w) = [| Star w |]
+    lift (Repeat count w) = [| Repeat count w |]
+    lift (Alternative w1 w2) = [| Alternative w1 w2 |]
+    lift (Unique i) = [| Unique i |]
+    lift (Str i) = [| Str i |]
+    lift (Action a) = [| Action a |]
+    lift (Range i lst) = [| Range i lst |]
+    lift (Ref ref) = [| Ref ref |]
+    lift (DirectChild ref) = [| DirectChild ref |]
+    lift (ConstrainedRef ref action) = [| ConstrainedRef ref action |]
+    lift a = return . ConE . mkName $ show a
