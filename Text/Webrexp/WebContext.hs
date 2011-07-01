@@ -2,7 +2,7 @@
 -- | This module define the state carryied during the webrexp
 -- evaluation. This state is implemented as a monad transformer
 -- on top of 'IO'.
-module Webrexp.WebContext
+module Text.Webrexp.WebContext
     ( 
     -- * Types
       WebCrawler
@@ -79,8 +79,8 @@ import Data.Functor.Identity
 import Data.Array.IO
 import qualified Data.Set as Set
 
-import qualified Webrexp.ProjectByteString as B
-import Webrexp.GraphWalker
+import qualified Text.Webrexp.ProjectByteString as B
+import Text.Webrexp.GraphWalker
 
 -- | Typical use of the WebContextT monad transformer
 -- allowing to download information

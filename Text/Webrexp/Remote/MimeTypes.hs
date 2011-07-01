@@ -1,7 +1,7 @@
 -- | This module implement helper functions to determine if
 -- downloaded URI can be parsed as HTML/XML. Everything
 -- is based on MIME-TYPE, or file extension for local content.
-module Webrexp.Remote.MimeTypes ( -- * Types
+module Text.Webrexp.Remote.MimeTypes ( -- * Types
                                   ContentType
                                 , ParseableType(..)
                                   -- * Functions

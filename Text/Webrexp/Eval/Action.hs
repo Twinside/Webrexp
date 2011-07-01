@@ -1,4 +1,4 @@
-module Webrexp.Eval.Action( evalAction 
+module Text.Webrexp.Eval.Action( evalAction 
                           , dumpActionVal
                           , isActionResultValid ) where
 
@@ -7,13 +7,13 @@ import Control.Monad.IO.Class
 import Data.List
 import Text.Regex.PCRE
 
-import Webrexp.GraphWalker
-import Webrexp.Exprtypes
-import Webrexp.WebContext
-import Webrexp.Eval.ActionFunc
+import Text.Webrexp.GraphWalker
+import Text.Webrexp.Exprtypes
+import Text.Webrexp.WebContext
+import Text.Webrexp.Eval.ActionFunc
 
-import Webrexp.Log
-import qualified Webrexp.ProjectByteString as B
+import Text.Webrexp.Log
+import qualified Text.Webrexp.ProjectByteString as B
 
 binArith :: (GraphWalker node rezPath)
          => (ActionValue -> ActionValue -> ActionValue) -- ^ Function to cal result

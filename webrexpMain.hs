@@ -6,7 +6,8 @@ import System.Environment
 import System.IO
 import System.Exit
 
-import Webrexp
+import Text.Webrexp
+import Text.Webrexp.Quote
 
 data Flag = Verbose
           | Quiet

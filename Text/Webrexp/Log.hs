@@ -3,7 +3,7 @@
 --
 -- Avoid using 'putStrLn' or 'putStr' in the project, favor
 -- using this module.
-module Webrexp.Log ( 
+module Text.Webrexp.Log ( 
       debugLog
     , textOutput 
     ) where
@@ -11,7 +11,7 @@ module Webrexp.Log (
 import System.IO
 import Control.Monad
 import Control.Monad.IO.Class
-import Webrexp.WebContext
+import Text.Webrexp.WebContext
 
 -- | Debugging function, only displayed in verbose
 -- logging mode.

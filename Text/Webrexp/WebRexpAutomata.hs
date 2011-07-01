@@ -1,4 +1,6 @@
-module Webrexp.WebRexpAutomata ( -- * Types
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+module Text.Webrexp.WebRexpAutomata ( -- * Types
                                  Automata
                                , StateIndex
 
@@ -19,11 +21,13 @@ import Data.Array
 import qualified Data.Array.Unboxed as U
 import System.IO
 
-import Webrexp.Log
-import Webrexp.Eval
-import Webrexp.GraphWalker
-import Webrexp.WebContext
-import Webrexp.Exprtypes
+import Text.Webrexp.Log
+import Text.Webrexp.Eval
+import Text.Webrexp.GraphWalker
+import Text.Webrexp.WebContext
+import Text.Webrexp.Exprtypes
+
+import Language.Haskell.TH.Syntax
 
 type AutomataSink = (Int, Int)
 
@@ -37,6 +41,32 @@ data AutomataAction =
     | Gather (U.UArray Int Int)
     deriving (Show)
     
+instance Lift AutomataAction where
+    lift Push = [| Push |]
+    lift PopPush = [| PopPush |]
+    lift Pop = [| Pop |]
+    lift AutoTrue = [| AutoTrue |]
+    lift (AutoSimple w) = [| AutoSimple w |]
+    lift (Scatter a) =
+      [| Scatter $ U.listArray arrayBound elemList |]
+        where elemList = U.elems a
+              arrayBound = U.bounds a
+    lift (Gather a) =
+      [| Gather $ U.listArray arrayBound elemList |]
+        where elemList = U.elems a
+              arrayBound = U.bounds a
+
+instance Lift AutomataState where
+    lift (AutoState act i1 i2) =
+        [| AutoState act i1 i2 |]
+
+instance Lift Automata where
+    lift a = [| Automata { autoStates =
+                              listArray stateBound states
+                         , beginState = beginIdx } |]
+        where beginIdx = beginState a
+              stateBound = bounds $ autoStates a
+              states = elems $ autoStates a
 
 data AutomataState = 
     -- | Action to perform, action on True

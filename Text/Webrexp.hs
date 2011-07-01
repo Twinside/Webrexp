@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 -- | Generic module for using Webrexp as a user.
-module Webrexp ( 
+module Text.Webrexp ( 
                -- * Default evaluation
                  evalWebRexp
                , evalWebRexpDepthFirst 
@@ -19,8 +19,8 @@ import Text.Parsec
 import System.IO
 import System.Exit
 
-import Webrexp.Exprtypes
-import Webrexp.Parser( webRexpParser )
+import Text.Webrexp.Exprtypes
+import Text.Webrexp.Parser( webRexpParser )
 
 import Webrexp.HaXmlNode
 import Webrexp.HxtNode
@@ -28,10 +28,10 @@ import Webrexp.JsonNode
 import Webrexp.UnionNode
 import Webrexp.DirectoryNode
 
-import Webrexp.ResourcePath
-import Webrexp.WebContext
+import Text.Webrexp.ResourcePath
+import Text.Webrexp.WebContext
 
-import Webrexp.WebRexpAutomata
+import Text.Webrexp.WebRexpAutomata
 
 data Conf = Conf
     { hammeringDelay :: Int
@@ -123,7 +123,9 @@ evalWebRexpWithConf conf =
                  dumpAutomata (expr conf) stdout $ buildAutomata packed
                  exitWith ExitSuccess)
 
-        when (verbose conf) (print wexpr)
+        when (verbose conf) 
+             (do putStrLn $ "code " ++ show (expr conf)
+                 print wexpr)
 
         let crawled :: Crawled Bool = do
               setUserAgent $ userAgent conf

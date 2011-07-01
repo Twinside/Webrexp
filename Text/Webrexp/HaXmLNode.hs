@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Webrexp.HaXmlNode( HaXmLNode ) where
+module Text.Webrexp.HaXmlNode( HaXmLNode ) where
 
 import Control.Applicative
 import Control.Monad.IO.Class
@@ -14,12 +14,12 @@ import Text.XML.HaXml.Parse
 import Text.XML.HaXml.Html.Parse
 import System.Directory
 
-import qualified Webrexp.ProjectByteString as B
+import qualified Text.Webrexp.ProjectByteString as B
 
-import Webrexp.GraphWalker
-import Webrexp.ResourcePath
-import Webrexp.Remote.MimeTypes
-import Webrexp.UnionNode
+import Text.Webrexp.GraphWalker
+import Text.Webrexp.ResourcePath
+import Text.Webrexp.Remote.MimeTypes
+import Text.Webrexp.UnionNode
 
 type HaXmLNode = Content Posn
 
