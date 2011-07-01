@@ -26,12 +26,9 @@ type HaXmLNode = Content Posn
 instance PartialGraph HaXmLNode ResourcePath where
     dummyElem = undefined
 
-    isResourceParseable _ _ ParseableHTML = True
     isResourceParseable _ _ ParseableXML = True
     isResourceParseable _ _ _ = False
 
-    parseResource _ ParseableHTML bindata = Just $ CElem e noPos
-        where (Document _prolog _ e _) = htmlParse "" $ B.unpack bindata
     parseResource _ ParseableXML bindata =
         case xmlParse' "" $ B.unpack bindata of
             Left _ -> Nothing

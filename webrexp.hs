@@ -23,6 +23,7 @@ import Webrexp.Exprtypes
 import Webrexp.Parser( webRexpParser )
 
 import Webrexp.HaXmlNode
+import Webrexp.HxtNode
 import Webrexp.JsonNode
 import Webrexp.UnionNode
 import Webrexp.DirectoryNode
@@ -58,8 +59,8 @@ defaultConf = Conf
     }
 
 type CrawledNode =
-    UnionNode HaXmLNode
-             (UnionNode JsonNode DirectoryNode)
+    UnionNode (UnionNode  HxtNode  HaXmLNode)
+              (UnionNode JsonNode DirectoryNode)
 
 type Crawled a =
             WebCrawler CrawledNode ResourcePath a

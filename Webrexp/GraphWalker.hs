@@ -18,6 +18,11 @@ module Webrexp.GraphWalker
     , descendants 
     , findNamed
     , findFirstNamed 
+
+    -- * Helper functions without monadic interface.
+    , pureDescendants 
+    , findNamedPure 
+    , findFirstNamedPure
     ) where
 
 import Control.Applicative
@@ -150,3 +155,26 @@ findFirstNamed name lst = do
        [] -> return Nothing
        (x:_) -> return $ Just x
 
+pureDescendants :: (a -> [a]) -> a -> [(a, [(a, Int)])]
+pureDescendants pureChildren node = findDescendants (node, [])
+   where findDescendants (a, hist) =
+             let lst = [ (child, (a,idx) : hist)
+                         | (child, idx) <- zip (pureChildren a) [0..]]
+             in concat $ lst : map findDescendants lst
+
+-- | Like findNamed but without the monadic interface.
+findNamedPure :: (GraphWalker a r)
+              => (a -> [a]) -> String -> a -> [(a, [(a,Int)])]
+findNamedPure pureChildren name node = if nameOf node == Just name
+                    then ((node, []) :) validChildren
+                    else validChildren
+    where validChildren = filter (\(c, _) -> nameOf c == Just name)
+                        $ pureDescendants pureChildren node
+
+-- | Like findFirstNamed, but without the monadic interface.
+findFirstNamedPure :: (GraphWalker a r)
+                   => (a -> [a]) -> String -> [a] -> Maybe (a, [(a,Int)])
+findFirstNamedPure pureChildren name lst =
+  case concat $ map (findNamedPure pureChildren name) lst of
+     [] -> Nothing
+     (x:_) -> Just x
