@@ -3,7 +3,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- | This module implement the GraphWalker type class
 -- for node of HxT (Haskell Xml parser).
-module Webrexp.HxtNode( HxtNode ) where
+module Text.Webrexp.HxtNode ( HxtNode ) where
 
 import Control.Monad.IO.Class
 import Data.Maybe
@@ -14,13 +14,12 @@ import System.Directory
 import Text.XML.HXT.DOM.TypeDefs
 import Text.XML.HXT.Parser.HtmlParsec
 
-import qualified Webrexp.ProjectByteString as B
+import qualified Text.Webrexp.ProjectByteString as B
 
-import Webrexp.GraphWalker
-import Webrexp.ResourcePath
-import Webrexp.Remote.MimeTypes
-import Webrexp.UnionNode
-
+import Text.Webrexp.GraphWalker
+import Text.Webrexp.ResourcePath
+import Text.Webrexp.Remote.MimeTypes
+import Text.Webrexp.UnionNode
 
 -- | This type is an instance of 'GraphWalker'
 -- with 'ResourcePath' as 'GraphPath'

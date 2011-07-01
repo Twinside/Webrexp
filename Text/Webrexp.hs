@@ -22,11 +22,11 @@ import System.Exit
 import Text.Webrexp.Exprtypes
 import Text.Webrexp.Parser( webRexpParser )
 
-import Webrexp.HaXmlNode
-import Webrexp.HxtNode
-import Webrexp.JsonNode
-import Webrexp.UnionNode
-import Webrexp.DirectoryNode
+import Text.Webrexp.HaXmlNode
+import Text.Webrexp.HxtNode
+import Text.Webrexp.JsonNode
+import Text.Webrexp.UnionNode
+import Text.Webrexp.DirectoryNode
 
 import Text.Webrexp.ResourcePath
 import Text.Webrexp.WebContext
