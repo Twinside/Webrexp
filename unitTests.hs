@@ -1,6 +1,6 @@
 import Test.HUnit
 import Data.List( sort )
-import Webrexp.Exprtypes
+import Text.Webrexp.Exprtypes
 
 nodeRangeTests :: [Test]
 nodeRangeTests =

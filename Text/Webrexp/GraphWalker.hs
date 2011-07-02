@@ -81,7 +81,7 @@ data AccessResult a rezPath =
 -- if the first one is found to be bad. All
 -- the logic should use this interface.
 --
--- Minimal implementation : everything.
+-- Minimal implementation : everything but deepValueOf.
 class (GraphPath rezPath, Eq a)
         => GraphWalker a rezPath | a -> rezPath where
     -- | Get back an attribute of the node
@@ -117,6 +117,12 @@ class (GraphPath rezPath, Eq a)
     -- are querying the filesystem for example, it should
     -- return False)
     isHistoryMutable :: a -> Bool
+
+    -- | Like value of, but force the node to collect the
+    -- value of all it's children in the process.
+    deepValueOf :: (MonadIO m, Functor m) => a -> m String
+    deepValueOf node = (valueOf node ++) <$> childrenText
+        where childrenText = concat <$> (childrenOf node >>= mapM deepValueOf)
 
 -- | Return a list of all the "children"/linked node of a given node.
 -- The given node is not included in the list.
@@ -155,6 +161,7 @@ findFirstNamed name lst = do
        [] -> return Nothing
        (x:_) -> return $ Just x
 
+-- | like `descendants`, but without the monadic interface.
 pureDescendants :: (a -> [a]) -> a -> [(a, [(a, Int)])]
 pureDescendants pureChildren node = findDescendants (node, [])
    where findDescendants (a, hist) =
@@ -162,7 +169,7 @@ pureDescendants pureChildren node = findDescendants (node, [])
                          | (child, idx) <- zip (pureChildren a) [0..]]
              in concat $ lst : map findDescendants lst
 
--- | Like findNamed but without the monadic interface.
+-- | Like `findNamed` but without the monadic interface.
 findNamedPure :: (GraphWalker a r)
               => (a -> [a]) -> String -> a -> [(a, [(a,Int)])]
 findNamedPure pureChildren name node = if nameOf node == Just name
@@ -171,7 +178,7 @@ findNamedPure pureChildren name node = if nameOf node == Just name
     where validChildren = filter (\(c, _) -> nameOf c == Just name)
                         $ pureDescendants pureChildren node
 
--- | Like findFirstNamed, but without the monadic interface.
+-- | Like `findFirstNamed`, but without the monadic interface.
 findFirstNamedPure :: (GraphWalker a r)
                    => (a -> [a]) -> String -> [a] -> Maybe (a, [(a,Int)])
 findFirstNamedPure pureChildren name lst =

@@ -37,13 +37,18 @@ instance PartialGraph HxtNode ResourcePath where
 
 
 instance GraphWalker HxtNode ResourcePath where
+    deepValueOf = return . deepValue
     isHistoryMutable _ = False
     accessGraph = loadHtml
     attribOf = findAttribute 
     childrenOf = return . findChildren
-    valueOf = valueOfNode
+    valueOf a = valueOfNode a
     nameOf = getName
     indirectLinks = hyperNode
+
+deepValue :: HxtNode -> String
+deepValue (NTree (XText txt) _) = txt
+deepValue a = concatMap deepValue $ findChildren a
 
 valueOfNode :: HxtNode -> String
 valueOfNode (NTree (XText txt) _) = txt

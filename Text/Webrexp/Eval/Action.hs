@@ -2,6 +2,7 @@ module Text.Webrexp.Eval.Action( evalAction
                           , dumpActionVal
                           , isActionResultValid ) where
 
+import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class
 import Data.List
@@ -72,19 +73,21 @@ dumpActionVal (AInt i) = textOutput $ show i
 dumpActionVal _ = return ()
 
 dumpContent :: (GraphWalker node rezPath)
-            => Maybe (EvalState node rezPath)
+            => Bool     -- ^ If we convert recursively data.
+            -> Maybe (EvalState node rezPath)   -- ^ Node to be dumped
             -> WebCrawler node rezPath (ActionValue, Maybe (EvalState node rezPath))
-dumpContent Nothing = return (ABool False, Nothing)
-dumpContent e@(Just (Node ns)) =
-  case indirectLinks (this ns) of
-    [] -> return (AString $ valueOf (this ns), e)
-    links -> do
+dumpContent _ Nothing = return (ABool False, Nothing)
+dumpContent recursive e@(Just (Node ns)) =
+  case (indirectLinks (this ns), recursive) of
+    ([], False) -> return (AString $ valueOf (this ns), e)
+    ([], True) -> (\a -> (AString a, e)) <$> deepValueOf (this ns)
+    (links, _) -> do
         loggers <- prepareLogger
         mapM_ (\l -> dumpDataAtPath loggers $
                             rootRef ns <//> l) links
         return (ABool True, e)
-dumpContent e@(Just (Text str)) = return (AString str, e)
-dumpContent e@(Just (Blob b)) = do
+dumpContent _ e@(Just (Text str)) = return (AString str, e)
+dumpContent _ e@(Just (Blob b)) = do
     (norm, _, _) <- prepareLogger
     let filename = localizePath $ sourcePath b
     liftIO . norm $ "Dumping blob in " ++ filename
@@ -123,8 +126,8 @@ evalAction (NodeReplace sub) e = do
          
 evalAction (CstI i) n = return (AInt i, n)
 evalAction (CstS s) n = return (AString s, n)
-evalAction OutputAction e =
-    dumpContent e
+evalAction OutputAction e = dumpContent False e
+evalAction DeepOutputAction e = dumpContent True e
 
 evalAction (ARef r) e@(Just (Node n)) =
     case attribOf r (this n) of

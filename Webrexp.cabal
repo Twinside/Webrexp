@@ -1,5 +1,5 @@
 Name:       Webrexp
-Version:    1.0
+Version:    1.1
 Synopsis:   Regexp-like engine to scrap web data
 Build-Type: Simple
 License:    BSD3
@@ -53,6 +53,7 @@ Library
             Text.Webrexp.Eval.Action
             Text.Webrexp.Eval.ActionFunc
             Text.Webrexp.HaXmlNode
+            Text.Webrexp.HxtNode
             Text.Webrexp.JsonNode
             Text.Webrexp.Log
             Text.Webrexp.ProjectByteString

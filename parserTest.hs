@@ -2,8 +2,8 @@
 import Control.Monad
 import Text.Parsec
 
-import Webrexp
-import Webrexp.Exprtypes
+import Text.Webrexp
+import Text.Webrexp.Exprtypes
 
 tests :: [String]
 tests = [ "img[4]"

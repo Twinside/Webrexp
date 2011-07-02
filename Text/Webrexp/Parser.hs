@@ -186,6 +186,7 @@ actionTerm = (CstI . fromIntegral <$> natural)
           <|> parens actionExpr
           <|> (CstS <$> stringLiteral)
           <|> (OutputAction <$ char '.')
+          <|> (DeepOutputAction <$ char '#')
           <|> actionCall
           <?> "actionTerm"
 

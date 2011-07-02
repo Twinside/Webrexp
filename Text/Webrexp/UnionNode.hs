@@ -82,6 +82,9 @@ instance (PartialGraph a ResourcePath, PartialGraph b ResourcePath)
     isHistoryMutable (UnionLeft a) = isHistoryMutable a
     isHistoryMutable (UnionRight a) = isHistoryMutable a
 
+    deepValueOf (UnionLeft a) = deepValueOf a
+    deepValueOf (UnionRight a) = deepValueOf a
+
 parseUnion :: forall a b m.
               ( MonadIO m
               , PartialGraph a ResourcePath
