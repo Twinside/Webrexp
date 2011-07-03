@@ -83,10 +83,12 @@ evalWebRexpFor (Action action) e = do
        else return (False, [])
 
 evalWebRexpFor (Unique bucket) e = do
-    debugLog $ "> '!' (" ++ show bucket ++ ")"
     beenVisited <- visited e
+    debugLog $ "> '!' (" ++ show bucket ++ ") : visited: " ++ show beenVisited
     return (beenVisited, [e])
-     where visited (Node n) = checkUnique . show $ rootRef n
+     where visited (Node n) = do
+               debugLog $ "> '!' (" ++ show bucket ++ ") : visited: " ++ show (rootRef n)
+               checkUnique . show $ rootRef n
            visited (Text s) = checkUnique s
            visited (Blob b) = checkUnique . show $ sourcePath b
            checkUnique s = do

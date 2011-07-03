@@ -46,14 +46,14 @@ rezPathToString (Remote uri) = show uri
 toRezPath :: String -> Maybe ResourcePath
 toRezPath s = case (parseURI s, isValid s, isRelativeReference s) of
         (Just u, _, _) -> Just $ Remote u
-        (Nothing, True, _) -> Just $ Local s
+        (Nothing, True, _) -> Just . Local $ normalise s
         (Nothing, False, True) -> Remote <$> parseRelativeReference s
         (Nothing, False, False) -> Nothing
 
 -- | Resource path combiner, similar to </> in use,
 -- but also handle URI.
 combinePath :: ResourcePath -> ResourcePath -> ResourcePath
-combinePath (Local a) (Local b) = Local $ dropFileName a </> b
+combinePath (Local a) (Local b) = Local . normalise $ dropFileName a </> b
 combinePath (Remote a) (Remote b) =
     case b `relativeTo` a of
          -- TODO : find another way for this
