@@ -22,7 +22,7 @@ data ParseableType =
     | ParseableXML
       -- | Do what you want with it for now.
     | ParseableJson
-    deriving Eq
+    deriving (Eq, Show)
 
 -- | Type alias to ease documentation.
 type ContentType = String

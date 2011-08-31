@@ -98,11 +98,11 @@ parseUnion (Just parser) datapath binaryData =
     let binaryContent = DataBlob datapath binaryData
     in case ( isResourceParseable (dummyElem :: a) datapath parser
             , isResourceParseable (dummyElem :: b) datapath parser ) of
-         (True,    _) -> maybe (return binaryContent)
-                               (return . Result datapath . UnionLeft) 
+         (True,    _) -> maybe (liftIO (putStrLn "Lefterr") >> return binaryContent)
+                               (\a -> liftIO (putStrLn "Leftok") >> (return . Result datapath . UnionLeft $ a)) 
                                $ parseResource datapath parser binaryData
-         (   _, True) -> maybe (return binaryContent)
-                               (return . Result datapath . UnionRight)
+         (   _, True) -> maybe (liftIO (putStrLn "Righterr") >> return binaryContent)
+                               (\a -> liftIO (putStrLn "Rightok") >> (return . Result datapath . UnionRight $ a))
                                $ parseResource datapath parser binaryData
          _            -> return binaryContent
 
@@ -113,13 +113,17 @@ loadData :: ( MonadIO m
             , PartialGraph b ResourcePath )
          => Loggers -> ResourcePath
          -> m (AccessResult (UnionNode a b) ResourcePath)
-loadData (logger, _errLog, _verbose) datapath@(Local s) = do
+loadData (logger, _errLog, verbose) datapath@(Local s) = do
     liftIO . logger $ "Opening file : '" ++ s ++ "'"
     realFile <- liftIO $ doesFileExist s
     if not realFile
-       then return AccessError
+       then do
+           liftIO . verbose $ "Unable to open file : " ++ s
+           return AccessError
        else do file <- liftIO $ B.readFile s
-       	       parseUnion (getParseKind s) datapath file
+       	       let kind = getParseKind s
+       	       liftIO . verbose $ "Found kind " ++ show kind ++ " for (" ++ s ++ ")"
+       	       parseUnion kind datapath file
 
 loadData loggers@(logger, _, verbose) (Remote uri) = do
   liftIO . logger $ "Downloading URL : '" ++ show uri ++ "'"
