@@ -1,6 +1,4 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
 module Text.Webrexp.Quote ( webrexpParse
                           , webrexpCompile ) where
 

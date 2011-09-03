@@ -105,10 +105,10 @@ evalAction (ActionExprs actions) e = do
     debugLog $ "\t>" ++ show (fst rez)
     return rez
     where eval v@(ABool False, _) _ = do
-              debugLog $ "\t|False"
+              debugLog "\t|False"
               return v
           eval v@(ATypeError, _) _ = do
-              debugLog $ "\t|ATypeError"
+              debugLog "\t|ATypeError"
               return v
           eval (actionVal, el) act = do
               debugLog $ "\t>" ++ show actionVal
@@ -187,7 +187,7 @@ actionFunEval :: (GraphWalker node rezPath)
               -> WebCrawler node rezPath
                           (ActionValue, Maybe (EvalState node rezPath))
 actionFunEval f actions st =  do
-    vals <- mapM (\a -> evalAction a st) actions
+    vals <- mapM (`evalAction` st) actions
     let values = map fst vals
     if all (/= ATypeError) values
        then return $ f values st
@@ -200,7 +200,7 @@ actionFunEvalM :: (GraphWalker node rezPath)
                -> WebCrawler node rezPath
                           (ActionValue, Maybe (EvalState node rezPath))
 actionFunEvalM f actions st = do
-    vals <- mapM (\a -> evalAction a st) actions
+    vals <- mapM (`evalAction` st) actions
     let values = map fst vals
     if all (/= ATypeError) values
        then f values st

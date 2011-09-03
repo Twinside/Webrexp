@@ -65,14 +65,14 @@ toString ATypeError = "ATypeError"
 funToString :: ActionFunc node rezPath
 funToString [ATypeError] a = trace "FUCK" (ATypeError, a)
 funToString [v] a = (AString $ toString v, a)
-funToString b a = trace (show b) $ (ATypeError, a)
+funToString b a = trace (show b) (ATypeError, a)
 
 
 -- | Remove blank space before and after a string
 trimString :: ActionFunc node rezPath
 trimString [AString s] a = (AString $ trimm s, a)
     where trimm = reverse . trimBegin . reverse . trimBegin
-          trimBegin = dropWhile (\c -> c == ' ' || c == '\t')
+          trimBegin = dropWhile (\c -> c `elem` " \t")
 
 trimString _ a = (ATypeError, a)
 

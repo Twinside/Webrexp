@@ -182,6 +182,6 @@ findNamedPure pureChildren name node = if nameOf node == Just name
 findFirstNamedPure :: (GraphWalker a r)
                    => (a -> [a]) -> String -> [a] -> Maybe (a, [(a,Int)])
 findFirstNamedPure pureChildren name lst =
-  case concat $ map (findNamedPure pureChildren name) lst of
+  case concatMap (findNamedPure pureChildren name) lst of
      [] -> Nothing
      (x:_) -> Just x

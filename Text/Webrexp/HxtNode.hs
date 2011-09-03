@@ -40,7 +40,7 @@ instance GraphWalker HxtNode ResourcePath where
     accessGraph = loadHtml
     attribOf = findAttribute 
     childrenOf = return . findChildren
-    valueOf a = valueOfNode a
+    valueOf = valueOfNode
     nameOf = getName
     indirectLinks = hyperNode
 
@@ -56,7 +56,7 @@ valueOfNode a =
         _ -> ""
 
 extractText :: [HxtNode] -> String
-extractText = concat . map valueOfNode
+extractText = concatMap valueOfNode
 
 findAttribute :: String -> HxtNode -> Maybe String
 findAttribute attrName (NTree (XTag _ attrList) _) =

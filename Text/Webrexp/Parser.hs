@@ -205,7 +205,7 @@ actionList = (aexpr <$>
 
 webrexp :: Parsed st WebRexp
 webrexp = (do path <- exprUnion
-              rest <- (recParser <|> return [])
+              rest <- recParser <|> return []
               return . aBrancher $ path : rest) <?> "webrexp"
     where separator = whiteSpace >> char ';' >> whiteSpace
           aBrancher [a] = a

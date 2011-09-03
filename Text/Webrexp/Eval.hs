@@ -9,6 +9,7 @@ module Text.Webrexp.Eval
 import Control.Applicative
 import Control.Monad
 import Data.List
+import Data.Maybe
 
 import Text.Webrexp.GraphWalker
 import Text.Webrexp.Exprtypes
@@ -57,7 +58,7 @@ searchRefIn recurse (OfClass r s) n = do
     return [v | v <- subs, attribOf "class" (this v) == Just s]
 searchRefIn recurse (Attrib  r s) n = do
     subs <- searchRefIn recurse r n
-    return [v | v <- subs, attribOf s (this v) /= Nothing]
+    return [v | v <- subs, isJust $ attribOf s (this v)]
 searchRefIn recurse (OfName  r s) n = do
     subs <- searchRefIn recurse r n
     return [v | v <- subs, attribOf "id" (this v) == Just s]

@@ -10,6 +10,7 @@ module Text.Webrexp.Log (
 
 import System.IO
 import Control.Exception( IOException )
+import qualified Control.Exception as Ex
 import Control.Monad
 import Control.Monad.IO.Class
 import Text.Webrexp.WebContext
@@ -28,7 +29,7 @@ debugLog str = do
 textOutput :: String -> WebCrawler node rezPath ()
 textOutput str = do
     handle <- getOutput
-    liftIO $ catch (hPutStr handle str)
+    liftIO $ Ex.catch (hPutStr handle str)
              (\e -> hPutStrLn stderr $ "Writing error : " ++ 
                                        show (e :: IOException))
 

@@ -118,5 +118,5 @@ listDirectory fpath = do
             let f = if isDir then Directory else File
             return $ f (FullPath wholePath) path)
 
-              $ filter (\a -> a /= "." && a /= "..") lst
+              $ filter (\a -> a `notElem` [".", ".."]) lst
 

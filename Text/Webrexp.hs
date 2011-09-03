@@ -101,8 +101,7 @@ evalWebRexpWithEvaluator :: (WebRexp -> Crawled Bool) -> String -> IO Bool
 evalWebRexpWithEvaluator evaluator str = 
   case runParser webRexpParser () "expr" str of
     Left err -> do
-        putStrLn "Parsing error :\n"
-        print err
+        putStrLn $ "Parsing error :\n" ++ show err
         return False
 
     Right wexpr ->
