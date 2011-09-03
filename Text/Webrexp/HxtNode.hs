@@ -26,14 +26,12 @@ import Text.Webrexp.UnionNode
 type HxtNode = NTree XNode
 
 instance PartialGraph HxtNode ResourcePath where
-    dummyElem = undefined
-
     isResourceParseable _ _ ParseableHTML = True
     isResourceParseable _ _ _ = False
 
-    parseResource _ ParseableHTML bindata =
-        Just . parseToHTMLNode $ B.unpack bindata
-    parseResource _ _ _ = error "Cannot parse"
+    parseResource _ _ ParseableHTML bindata =
+        return . Just . parseToHTMLNode $ B.unpack bindata
+    parseResource _ _ _ _ = error "Cannot parse"
 
 
 instance GraphWalker HxtNode ResourcePath where

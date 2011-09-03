@@ -22,13 +22,11 @@ import Text.Webrexp.Remote.MimeTypes
 type JsonNode = (Maybe String, JSValue)
 
 instance PartialGraph JsonNode ResourcePath where
-    dummyElem = undefined
-
     isResourceParseable _ _ ParseableJson = True
     isResourceParseable _ _ _ = False
 
-    parseResource _ ParseableJson binData = (,) Nothing <$> readJSON binData
-    parseResource _ _ _ = error "Wrong kind of parser used"
+    parseResource _ _ ParseableJson binData = return $ (,) Nothing <$> readJSON binData
+    parseResource _ _ _ _ = error "Wrong kind of parser used"
 
 instance GraphWalker JsonNode ResourcePath where
     accessGraph = loadJson

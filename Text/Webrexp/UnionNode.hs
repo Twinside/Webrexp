@@ -23,16 +23,16 @@ import qualified Text.Webrexp.ProjectByteString as B
 -- | Extension of GraphWalker class to be able to query the type
 -- about it's possibility of parsing. Very ad-hoc.
 class (GraphWalker a rezPath) => PartialGraph a rezPath where
-    -- | Provide a dummy element just to be passed at 'isResourceParseable'.
-    -- Forcing a monoid instance was not ideal, so here is the hack.
-    dummyElem :: a
-
     -- | Tell if a node type can parse a given document, used
-    -- in the node type decision.
+    -- in the node type decision. The first argument has to be
+    -- ignored, so you can pass 'undefined' to it.
     isResourceParseable :: a -> rezPath -> ParseableType -> Bool
 
     -- | The real parsing function.
-    parseResource :: rezPath -> ParseableType -> B.ByteString -> Maybe a
+    -- The IO monad is only here to provide a way to log information
+    -- TODO : find a better way.
+    parseResource :: (MonadIO m)
+                  => Loggers -> rezPath -> ParseableType -> B.ByteString -> m (Maybe a)
 
 -- | Data type which is an instance of graphwalker.
 -- Use it to combine two other node types.
@@ -45,17 +45,15 @@ instance ( PartialGraph a rezPath
          , PartialGraph b rezPath
          , GraphWalker (UnionNode a b) rezPath)
       => PartialGraph (UnionNode a b) rezPath where
-    dummyElem = undefined
-
     isResourceParseable _ datapath parser =
-        isResourceParseable (dummyElem :: a) datapath parser ||
-            isResourceParseable (dummyElem :: b) datapath parser
+        isResourceParseable (undefined :: a) datapath parser ||
+            isResourceParseable (undefined :: b) datapath parser
 
-    parseResource datapath parser binData =
-        case ( isResourceParseable (dummyElem :: a) datapath parser
-             , isResourceParseable (dummyElem :: b) datapath parser) of
-            (True, _) -> UnionLeft <$> parseResource datapath parser binData
-            (_   , _) -> UnionRight <$> parseResource datapath parser binData
+    parseResource loggers datapath parser binData =
+        case ( isResourceParseable (undefined :: a) datapath parser
+             , isResourceParseable (undefined :: b) datapath parser) of
+            (True, _) -> parseResource loggers datapath parser binData >>= (\a -> return $ UnionLeft <$> a)
+            (_   , _) -> parseResource loggers datapath parser binData >>= (\a -> return $ UnionRight <$> a)
 
 instance (PartialGraph a ResourcePath, PartialGraph b ResourcePath)
         => GraphWalker (UnionNode a b) ResourcePath where
@@ -86,40 +84,41 @@ instance (PartialGraph a ResourcePath, PartialGraph b ResourcePath)
     deepValueOf (UnionRight a) = deepValueOf a
 
 parseUnion :: forall a b m.
-              ( MonadIO m
+              ( MonadIO m, Functor m
               , PartialGraph a ResourcePath
               , PartialGraph b ResourcePath )
-           => Maybe ParseableType -> ResourcePath -> B.ByteString
+           => Loggers -> Maybe ParseableType -> ResourcePath -> B.ByteString
            -> m (AccessResult (UnionNode a b) ResourcePath)
-parseUnion Nothing datapath binaryData =
+parseUnion _ Nothing datapath binaryData =
     return $ DataBlob datapath binaryData
 
-parseUnion (Just parser) datapath binaryData =
+parseUnion loggers (Just parser) datapath binaryData =
     let binaryContent = DataBlob datapath binaryData
-    in case ( isResourceParseable (dummyElem :: a) datapath parser
-            , isResourceParseable (dummyElem :: b) datapath parser ) of
-         (True,    _) -> maybe (return binaryContent)
-                               (return . Result datapath . UnionLeft) 
-                               $ parseResource datapath parser binaryData
-         (   _, True) -> maybe (return binaryContent)
-                               (return . Result datapath . UnionRight)
-                               $ parseResource datapath parser binaryData
+    in case ( isResourceParseable (undefined :: a) datapath parser
+            , isResourceParseable (undefined :: b) datapath parser ) of
+         (True,    _) ->
+            maybe binaryContent 
+                  (Result datapath . UnionLeft) <$> parseResource loggers datapath parser binaryData
+
+         (   _, True) -> maybe binaryContent
+                               (Result datapath . UnionRight)
+                               <$> parseResource loggers datapath parser binaryData
          _            -> return binaryContent
 
 
 
-loadData :: ( MonadIO m
+loadData :: ( MonadIO m, Functor m
             , PartialGraph a ResourcePath
             , PartialGraph b ResourcePath )
          => Loggers -> ResourcePath
          -> m (AccessResult (UnionNode a b) ResourcePath)
-loadData (logger, _errLog, _verbose) datapath@(Local s) = do
+loadData loggers@(logger, _errLog, _verbose) datapath@(Local s) = do
     liftIO . logger $ "Opening file : '" ++ s ++ "'"
     realFile <- liftIO $ doesFileExist s
     if not realFile
        then return AccessError
        else do file <- liftIO $ B.readFile s
-       	       parseUnion (getParseKind s) datapath file
+       	       parseUnion loggers (getParseKind s) datapath file
 
 loadData loggers@(logger, _, verbose) (Remote uri) = do
   liftIO . logger $ "Downloading URL : '" ++ show uri ++ "'"
@@ -131,6 +130,7 @@ loadData loggers@(logger, _, verbose) (Remote uri) = do
     (hdr:_) -> do
         liftIO . verbose $ "Downloaded (" ++ show u ++ ") ["
                                       ++ hdrValue hdr ++ "] "
-        parseUnion (getParserForMimeType $ hdrValue hdr)
+        parseUnion loggers
+                   (getParserForMimeType $ hdrValue hdr)
                    (Remote u) binaryData
 

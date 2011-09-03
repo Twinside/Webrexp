@@ -76,12 +76,10 @@ currentDirectoryNode = do
 -- | The problem of this instance is the fact that
 -- it's a "sink" instance, it accepts everything.
 instance PartialGraph DirectoryNode ResourcePath where
-    dummyElem = undefined
-
     isResourceParseable _ (Local _) _ = True
     isResourceParseable _ _ _ = False
 
-    parseResource _ _ _ = Nothing
+    parseResource _ _ _ _ = return Nothing
 
 instance GraphWalker DirectoryNode ResourcePath where
     -- For now, no file attribute, in the future, might

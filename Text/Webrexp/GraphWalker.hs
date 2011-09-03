@@ -109,7 +109,7 @@ class (GraphPath rezPath, Eq a)
     -- resource, so an updated name can be given.
     -- The given function is there to log information,
     -- the second is to log errors
-    accessGraph :: (MonadIO m)
+    accessGraph :: (MonadIO m, Functor m)
                 => Loggers -> rezPath -> m (AccessResult a rezPath)
 
     -- | Tell if the history associated is fixed or not.

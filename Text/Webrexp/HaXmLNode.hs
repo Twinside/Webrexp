@@ -6,6 +6,7 @@ module Text.Webrexp.HaXmlNode( HaXmLNode ) where
 import Control.Applicative
 import Control.Monad.IO.Class
 import Data.Maybe( catMaybes )
+import Data.List( find )
 import Network.HTTP
 import Network.URI
 import Text.XML.HaXml.Types
@@ -24,28 +25,31 @@ import Text.Webrexp.UnionNode
 type HaXmLNode = Content Posn
 
 instance PartialGraph HaXmLNode ResourcePath where
-    dummyElem = undefined
-
     isResourceParseable _ _ ParseableXML = True
     isResourceParseable _ _ _ = False
 
-    parseResource _ ParseableXML bindata =
+    parseResource _ _ ParseableXML bindata =
         case xmlParse' "" $ B.unpack bindata of
-            Left _ -> Nothing
-            Right (Document _prolog _ e _) -> Just $ CElem e noPos
-    parseResource _ _ _ = error "Cannot parse"
+            Left _ -> return Nothing
+            Right (Document _prolog _ e _) -> return . Just $ CElem e noPos
+    parseResource _ _ _ _ = error "Cannot parse"
+
+haxmlNameToString :: QName -> String
+haxmlNameToString (N n) = n
+haxmlNameToString (QN _ n) = n
 
 instance GraphWalker HaXmLNode ResourcePath where
     accessGraph = loadHtml
 
 
     attribOf attrName (CElem (Elem _ attrList _) _) =
-        show <$> lookup attrName attrList
+        show . snd <$> find nameFinder attrList
+            where nameFinder (n,_) = haxmlNameToString n == attrName
     attribOf _ _ = Nothing
 
     childrenOf = return . pureChildren
 
-    nameOf (CElem (Elem n _ _) _) = Just n
+    nameOf (CElem (Elem n _ _) _) = Just $ haxmlNameToString n
     nameOf _ = Nothing
 
     indirectLinks n =
