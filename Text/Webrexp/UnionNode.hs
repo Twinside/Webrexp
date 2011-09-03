@@ -112,13 +112,17 @@ loadData :: ( MonadIO m, Functor m
             , PartialGraph b ResourcePath )
          => Loggers -> ResourcePath
          -> m (AccessResult (UnionNode a b) ResourcePath)
-loadData loggers@(logger, _errLog, _verbose) datapath@(Local s) = do
+loadData loggers@(logger, _errLog, verbose) datapath@(Local s) = do
     liftIO . logger $ "Opening file : '" ++ s ++ "'"
     realFile <- liftIO $ doesFileExist s
     if not realFile
-       then return AccessError
+       then do
+           liftIO . verbose $ "Unable to open file : " ++ s
+           return AccessError
        else do file <- liftIO $ B.readFile s
-       	       parseUnion loggers (getParseKind s) datapath file
+       	       let kind = getParseKind s
+       	       liftIO . verbose $ "Found kind " ++ show kind ++ " for (" ++ s ++ ")"
+       	       parseUnion loggers kind datapath file
 
 loadData loggers@(logger, _, verbose) (Remote uri) = do
   liftIO . logger $ "Downloading URL : '" ++ show uri ++ "'"
