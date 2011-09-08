@@ -46,7 +46,8 @@ Library
                    Text.Webrexp.Eval,
                    Text.Webrexp.Exprtypes,
                    Text.Webrexp.GraphWalker,
-                   Text.Webrexp.ResourcePath
+                   Text.Webrexp.ResourcePath,
+                   Text.Webrexp.Quote
 
   Other-Modules:
             Text.Webrexp.DirectoryNode
