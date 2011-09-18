@@ -94,10 +94,10 @@ parserOfKind _ datapath = DataBlob datapath
 
 -- | Given a resource path, do the required loading
 loadHtml :: (MonadIO m)
-         => Loggers -> ResourcePath
+         => Loggers m -> ResourcePath
          -> m (AccessResult HxtNode ResourcePath)
 loadHtml (logger, _errLog, _verbose) (Local s) = do
-    liftIO . logger $ "Opening file : '" ++ s ++ "'"
+    logger $ "Opening file : '" ++ s ++ "'"
     realFile <- liftIO $ doesFileExist s
     if not realFile
        then return AccessError
@@ -106,7 +106,7 @@ loadHtml (logger, _errLog, _verbose) (Local s) = do
                       $ parseToHTMLNode file
 
 loadHtml loggers@(logger, _,  verbose) datapath@(Remote uri) = do
-  liftIO . logger $ "Downloading URL : '" ++ show uri ++ "'"
+  logger $ "Downloading URL : '" ++ show uri ++ "'"
   (u, rsp) <- downloadBinary loggers uri
   let contentType = retrieveHeaders HdrContentType rsp
   case contentType of
@@ -116,6 +116,6 @@ loadHtml loggers@(logger, _,  verbose) datapath@(Remote uri) = do
                         ++ hdrValue hdr ++ "] "
            
        	   kind = getParseKind (uriPath uri)
-       in do liftIO $ verbose logString
+       in do verbose logString
              return . parserOfKind kind datapath $ rspBody rsp
 

@@ -73,7 +73,7 @@ extractFileName (Remote a) = snd . splitFileName $ uriPath a
 extractFileName (Local c) = snd $ splitFileName c
 
 dumpResourcePath :: (Monad m, MonadIO m)
-                 => Loggers -> ResourcePath -> m ()
+                 => Loggers m -> ResourcePath -> m ()
 dumpResourcePath _ src@(Local source) = do
     cwd <- liftIO getCurrentDirectory
     liftIO . copyFile source $ cwd </> extractFileName src
@@ -87,18 +87,21 @@ dumpResourcePath loggers@(logger,_,_) p@(Remote a) = do
                             (hdrValue hdr) rawFilename
                  
 
-  liftIO . logger $ "Downloading '" ++ show a ++ "' in '" ++ filename
+  logger $ "Downloading '" ++ show a ++ "' in '" ++ filename
   liftIO . B.writeFile filename $ rspBody rsp
 
 -- | Helper function to grab a resource on internet and returning
 -- it's binary representation, and it's real place if any.
 downloadBinary :: (Monad m, MonadIO m)
-               => Loggers -> URI -> m (URI, Response B.ByteString)
-downloadBinary (_, errLog, verbose) url =
+               => Loggers m -> URI -> m (URI, Response B.ByteString)
+downloadBinary (_, _errLog, _verbose) url =
     liftIO . browse $ do
         setAllowRedirects True
-        setErrHandler errLog
-        setOutHandler verbose
+        -- setErrHandler errLog
+        -- TODO find a way to use that
+        -- setOutHandler verbose
+        setOutHandler . const $ return ()
+        setErrHandler . const $ return ()
         request $ defaultGETRequest_ url
 
 

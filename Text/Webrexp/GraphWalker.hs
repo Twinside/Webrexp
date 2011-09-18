@@ -35,10 +35,10 @@ type NodePath a = [(a,Int)]
 
 -- | Type used to propagate different logging
 -- level across the software.
-type Logger = String -> IO ()
+type Logger m = String -> m ()
 
 -- | Normal/Err/verbose loggers.
-type Loggers = (Logger, Logger, Logger)
+type Loggers m = (Logger m, Logger m, Logger m)
 
 -- | Represent indirect links or links which
 -- necessitate the use of the IO monad to walk
@@ -56,7 +56,7 @@ class (Show a) => GraphPath a where
     -- | Move semantic, try to dump the pointed
     -- resource to the current folder.
     dumpDataAtPath :: (Monad m, MonadIO m)
-                   => Loggers -> a
+                   => Loggers m -> a
                    -> m ()
 
     -- | Given a graphpath, transform it to
@@ -110,7 +110,7 @@ class (GraphPath rezPath, Eq a)
     -- The given function is there to log information,
     -- the second is to log errors
     accessGraph :: (MonadIO m, Functor m)
-                => Loggers -> rezPath -> m (AccessResult a rezPath)
+                => Loggers m -> rezPath -> m (AccessResult a rezPath)
 
     -- | Tell if the history associated is fixed or not.
     -- If the history is not fixed and can change (if you

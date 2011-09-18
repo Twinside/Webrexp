@@ -8,28 +8,5 @@ module Text.Webrexp.Log (
     , textOutput 
     ) where
 
-import System.IO
-import Control.Exception( IOException )
-import qualified Control.Exception as Ex
-import Control.Monad
-import Control.Monad.IO.Class
-import Text.Webrexp.WebContext
-
--- | Debugging function, only displayed in verbose
--- logging mode.
-debugLog :: String -> WebCrawler node rezPath ()
-debugLog str = do
-    verb <- isVerbose
-    when verb (liftIO $ putStrLn str)
-
-
--- | If a webrexp output some text, it must go through
--- this function. It ensure the writting in the correct
--- file.
-textOutput :: String -> WebCrawler node rezPath ()
-textOutput str = do
-    handle <- getOutput
-    liftIO $ Ex.catch (hPutStr handle str)
-             (\e -> hPutStrLn stderr $ "Writing error : " ++ 
-                                       show (e :: IOException))
+import Text.Webrexp.WebContext( debugLog, textOutput )
 

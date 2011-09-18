@@ -66,6 +66,10 @@ module Text.Webrexp.WebContext
     , incrementGetRangeCounter 
     , hasResourceBeenVisited
     , setResourceVisited
+
+    -- * Log system
+    , debugLog
+    , textOutput
     )
     where
 
@@ -78,6 +82,8 @@ import Control.Monad.Trans.Class
 import Data.Functor.Identity
 import Data.Array.IO
 import qualified Data.Set as Set
+import Control.Exception( IOException )
+import qualified Control.Exception as Ex
 
 import qualified Text.Webrexp.ProjectByteString as B
 import Text.Webrexp.GraphWalker
@@ -204,6 +210,13 @@ data Context node rezPath = Context
       -- | Counters used for range evaluation in DFS
     , countBucket :: IOUArray Int Counter
 
+      -- | Tell if we must keep the found information in memory
+      -- instead of directly dumping it on screen.
+    , mustGatherData :: Bool
+
+      -- | If you want to run a webrexp in library mode
+    , gatheredData :: [String]
+
       -- | Current log level
     , logLevel :: LogLevel
     , httpDelay :: Int
@@ -257,6 +270,8 @@ emptyContext = Context
     , logLevel = Normal
     , httpDelay = 1500
     , httpUserAgent = ""
+    , mustGatherData = False
+    , gatheredData = []
     , defaultOutput = stdout
     , uniqueBucket = undefined
     , countBucket = undefined
@@ -352,16 +367,41 @@ evalWithEmptyContext val = do
     return finalVal
 
 -- | Return normal, error, verbose logger
-prepareLogger :: (Monad m)
-              => WebContextT node rezPath m (Logger, Logger, Logger)
+prepareLogger :: (Monad m, MonadIO m)
+              => WebContextT node rezPath m 
+                    (Logger (WebContextT node rezPath IO)
+                    ,Logger (WebContextT node rezPath IO)
+                    ,Logger (WebContextT node rezPath IO))
 prepareLogger = WebContextT $ \c ->
     let silenceLog _ = return ()
-        errLog = hPutStrLn stderr
-        normalLog = putStrLn
-    in case logLevel c of
-      Quiet -> return ((silenceLog, errLog, silenceLog), c)
-      Normal -> return ((normalLog, errLog, silenceLog), c)
-      Verbose -> return ((normalLog, errLog, normalLog), c)
+        errLog = liftIO . hPutStrLn stderr
+        normalLog = textOutput
+    in case (mustGatherData c, logLevel c) of
+      (True, _) -> return ((silenceLog, gatheringLog, silenceLog), c)
+      (_, Quiet) -> return ((silenceLog, errLog, silenceLog), c)
+      (_, Normal) -> return ((normalLog, errLog, silenceLog), c)
+      (_, Verbose) -> return ((normalLog, errLog, normalLog), c)
+
+-- | Debugging function, only displayed in verbose
+-- logging mode.
+debugLog :: String -> WebCrawler node rezPath ()
+debugLog str = do
+    verb <- isVerbose
+    when verb (liftIO $ putStrLn str)
+
+
+-- | If a webrexp output some text, it must go through
+-- this function. It ensure the writting in the correct
+-- file.
+textOutput :: String -> WebCrawler node rezPath ()
+textOutput str = do
+    handle <- getOutput
+    liftIO $ Ex.catch (hPutStr handle str)
+             (\e -> hPutStrLn stderr $ "Writing error : " ++ 
+                                       show (e :: IOException))
+
+gatheringLog :: String -> WebCrawler node rezPath ()
+gatheringLog _ = return ()
 
 --------------------------------------------------
 ----            Depth First evaluation

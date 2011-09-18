@@ -59,20 +59,20 @@ instance GraphWalker JsonNode ResourcePath where
     valueOf (_, JSNull) = ""
 
 parseJson :: (MonadIO m)
-          => Loggers -> ResourcePath -> B.ByteString
+          => Loggers m -> ResourcePath -> B.ByteString
           -> m (AccessResult JsonNode ResourcePath)
 parseJson (_, errLog, _) datapath file =
     case parseJSON file of
-      Left err -> do liftIO . errLog $ "> JSON Parsing error " ++ err
+      Left err -> do errLog $ "> JSON Parsing error " ++ err
        	             return AccessError
       Right valid -> return $ Result datapath (Nothing, valid)
 
 -- | Given a resource path, do the required loading
 loadJson :: (MonadIO m)
-         => Loggers -> ResourcePath
+         => Loggers m -> ResourcePath
          -> m (AccessResult JsonNode ResourcePath)
 loadJson loggers@(logger, _errLog, _verbose) datapath@(Local s) = do
-    liftIO . logger $ "Opening file : '" ++ s ++ "'"
+    logger $ "Opening file : '" ++ s ++ "'"
     realFile <- liftIO $ doesFileExist s
     if not realFile
        then return AccessError
@@ -80,13 +80,13 @@ loadJson loggers@(logger, _errLog, _verbose) datapath@(Local s) = do
        	       parseJson loggers datapath file
 
 loadJson loggers@(logger, _, verbose) datapath@(Remote uri) = do
-  liftIO . logger $ "Downloading URL : '" ++ show uri ++ "'"
+  logger $ "Downloading URL : '" ++ show uri ++ "'"
   (u, rsp) <- downloadBinary loggers uri
   let contentType = retrieveHeaders HdrContentType rsp
   case contentType of
     [] -> return AccessError
     (hdr:_) ->
-       do liftIO . verbose $ "Downloaded (" ++ show u ++ ") ["
+       do verbose $ "Downloaded (" ++ show u ++ ") ["
                                 ++ hdrValue hdr ++ "] "
           parseJson loggers datapath $ rspBody rsp
 

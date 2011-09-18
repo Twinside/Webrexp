@@ -13,7 +13,6 @@ import Text.Webrexp.Exprtypes
 import Text.Webrexp.WebContext
 import Text.Webrexp.Eval.ActionFunc
 
-import Text.Webrexp.Log
 import qualified Text.Webrexp.ProjectByteString as B
 
 binArith :: (GraphWalker node rezPath)
@@ -90,7 +89,7 @@ dumpContent _ e@(Just (Text str)) = return (AString str, e)
 dumpContent _ e@(Just (Blob b)) = do
     (norm, _, _) <- prepareLogger
     let filename = localizePath $ sourcePath b
-    liftIO . norm $ "Dumping blob in " ++ filename
+    norm $ "Dumping blob in " ++ filename
     liftIO $ B.writeFile filename (blobData b)
     return (ABool True, e)
 

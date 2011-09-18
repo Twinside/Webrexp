@@ -32,7 +32,8 @@ class (GraphWalker a rezPath) => PartialGraph a rezPath where
     -- The IO monad is only here to provide a way to log information
     -- TODO : find a better way.
     parseResource :: (MonadIO m)
-                  => Loggers -> rezPath -> ParseableType -> B.ByteString -> m (Maybe a)
+                  => Loggers m -> rezPath -> ParseableType -> B.ByteString 
+                  -> m (Maybe a)
 
 -- | Data type which is an instance of graphwalker.
 -- Use it to combine two other node types.
@@ -87,7 +88,7 @@ parseUnion :: forall a b m.
               ( MonadIO m, Functor m
               , PartialGraph a ResourcePath
               , PartialGraph b ResourcePath )
-           => Loggers -> Maybe ParseableType -> ResourcePath -> B.ByteString
+           => Loggers m -> Maybe ParseableType -> ResourcePath -> B.ByteString
            -> m (AccessResult (UnionNode a b) ResourcePath)
 parseUnion _ Nothing datapath binaryData =
     return $ DataBlob datapath binaryData
@@ -110,30 +111,30 @@ parseUnion loggers (Just parser) datapath binaryData =
 loadData :: ( MonadIO m, Functor m
             , PartialGraph a ResourcePath
             , PartialGraph b ResourcePath )
-         => Loggers -> ResourcePath
+         => Loggers m -> ResourcePath
          -> m (AccessResult (UnionNode a b) ResourcePath)
 loadData loggers@(logger, _errLog, verbose) datapath@(Local s) = do
-    liftIO . logger $ "Opening file : '" ++ s ++ "'"
+    logger $ "Opening file : '" ++ s ++ "'"
     realFile <- liftIO $ doesFileExist s
     if not realFile
        then do
-           liftIO . verbose $ "Unable to open file : " ++ s
+           verbose $ "Unable to open file : " ++ s
            return AccessError
        else do file <- liftIO $ B.readFile s
        	       let kind = getParseKind s
-       	       liftIO . verbose $ "Found kind " ++ show kind ++ " for (" ++ s ++ ")"
+       	       verbose $ "Found kind " ++ show kind ++ " for (" ++ s ++ ")"
        	       parseUnion loggers kind datapath file
 
 loadData loggers@(logger, _, verbose) (Remote uri) = do
-  liftIO . logger $ "Downloading URL : '" ++ show uri ++ "'"
+  logger $ "Downloading URL : '" ++ show uri ++ "'"
   (u, rsp) <- downloadBinary loggers uri
   let contentType = retrieveHeaders HdrContentType rsp
       binaryData = rspBody rsp
   case contentType of
     [] -> return $ DataBlob (Remote u) binaryData
     (hdr:_) -> do
-        liftIO . verbose $ "Downloaded (" ++ show u ++ ") ["
-                                      ++ hdrValue hdr ++ "] "
+        verbose $ "Downloaded (" ++ show u ++ ") ["
+                                 ++ hdrValue hdr ++ "] "
         parseUnion loggers
                    (getParserForMimeType $ hdrValue hdr)
                    (Remote u) binaryData
