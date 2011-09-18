@@ -56,7 +56,6 @@ Library
             Text.Webrexp.HaXmlNode
             Text.Webrexp.HxtNode
             Text.Webrexp.JsonNode
-            Text.Webrexp.Log
             Text.Webrexp.ProjectByteString
             Text.Webrexp.Remote.MimeTypes
             Text.Webrexp.UnionNode

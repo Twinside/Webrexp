@@ -38,6 +38,7 @@ module Text.Webrexp.WebContext
 
     -- * User function
     , evalWithEmptyContext
+    , executeWithEmptyContext 
     , repurposeNode 
     
     -- * Implementation info
@@ -215,7 +216,7 @@ data Context node rezPath = Context
     , mustGatherData :: Bool
 
       -- | If you want to run a webrexp in library mode
-    , gatheredData :: [String]
+    , gatheredData :: [Either String String]
 
       -- | Current log level
     , logLevel :: LogLevel
@@ -302,6 +303,10 @@ setOutput handle = WebContextT $ \c ->
 getOutput :: (Monad m) => WebContextT node rezPath m Handle
 getOutput = WebContextT $ \c -> return (defaultOutput c, c)
 
+isDataOutputedDirectly :: (Monad m) => WebContextT node rezPath m Bool
+isDataOutputedDirectly = WebContextT $ \c ->
+        return (not $ mustGatherData c, c)
+
 -- | Set the user agent which must be used for indirect operations
 --
 -- The value is stored but not used yet.
@@ -366,6 +371,14 @@ evalWithEmptyContext val = do
     (finalVal, _context) <- runWebContextT val emptyContext
     return finalVal
 
+-- | Helper function used to evaluate a webrexp and get back
+-- data with a default context with sane defaults.
+executeWithEmptyContext :: (Monad m)
+                        => WebContextT node rezPath m a -> m [Either String String]
+executeWithEmptyContext val = do
+    (_, context) <- runWebContextT val (emptyContext { mustGatherData = True })
+    return $ gatheredData context
+
 -- | Return normal, error, verbose logger
 prepareLogger :: (Monad m, MonadIO m)
               => WebContextT node rezPath m 
@@ -377,7 +390,7 @@ prepareLogger = WebContextT $ \c ->
         errLog = liftIO . hPutStrLn stderr
         normalLog = textOutput
     in case (mustGatherData c, logLevel c) of
-      (True, _) -> return ((silenceLog, gatheringLog, silenceLog), c)
+      (True, _) -> return ((silenceLog, gatheringLog . Left, silenceLog), c)
       (_, Quiet) -> return ((silenceLog, errLog, silenceLog), c)
       (_, Normal) -> return ((normalLog, errLog, silenceLog), c)
       (_, Verbose) -> return ((normalLog, errLog, normalLog), c)
@@ -395,13 +408,20 @@ debugLog str = do
 -- file.
 textOutput :: String -> WebCrawler node rezPath ()
 textOutput str = do
-    handle <- getOutput
-    liftIO $ Ex.catch (hPutStr handle str)
-             (\e -> hPutStrLn stderr $ "Writing error : " ++ 
-                                       show (e :: IOException))
+    direct <- isDataOutputedDirectly 
+    if not direct
+       then gatheringLog $ Right str
+       else do handle <- getOutput
+               liftIO $ Ex.catch (hPutStr handle str)
+                       (\e -> hPutStrLn stderr $ "Writing error : " ++ 
+                                                show (e :: IOException))
 
-gatheringLog :: String -> WebCrawler node rezPath ()
-gatheringLog _ = return ()
+-- | Keep track of an error or a normal log in the application monad
+-- transformer.
+gatheringLog :: Either String String -> WebCrawler node rezPath ()
+gatheringLog d = WebContextT $ \c ->
+    return ((), c { gatheredData = gatheredData c ++ [d] })
+
 
 --------------------------------------------------
 ----            Depth First evaluation

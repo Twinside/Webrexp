@@ -6,6 +6,7 @@ module Text.Webrexp (
                , evalWebRexpDepthFirst 
                , parseWebRexp
                , evalParsedWebRexp
+               , executeParsedWebRexp 
 
                -- * Crawling configuration
                , Conf (..)
@@ -81,10 +82,16 @@ parseWebRexp str =
 
 -- | Evaluation for pre-parsed webrexp.
 -- Best method if a webrexp has to be evaluated
--- many times.
+-- many times. Evaluated using breadth first method.
 evalParsedWebRexp :: WebRexp -> IO Bool
 evalParsedWebRexp wexpr = evalWithEmptyContext crawled
  where crawled :: Crawled Bool = evalBreadthFirst (Text "") wexpr
+
+-- | Evaluate a webrexp and return all the dumped text as 'Right'
+-- and all errors as 'Left'. Evaluated using depth first method.
+executeParsedWebRexp :: WebRexp -> IO [Either String String]
+executeParsedWebRexp wexpr = executeWithEmptyContext crawled
+ where crawled :: Crawled Bool = evalDepthFirst (Text "") wexpr
 
 -- | Simple evaluation function, evaluation is
 -- the breadth first type.

@@ -21,7 +21,6 @@ import Data.Array
 import qualified Data.Array.Unboxed as U
 import System.IO
 
-import Text.Webrexp.Log
 import Text.Webrexp.Eval
 import Text.Webrexp.GraphWalker
 import Text.Webrexp.WebContext
