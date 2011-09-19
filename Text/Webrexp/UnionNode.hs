@@ -11,11 +11,11 @@
 module Text.Webrexp.UnionNode( PartialGraph( .. ), UnionNode ( .. ) ) where
 
 import Control.Applicative
-import Control.Monad.IO.Class
 import Network.HTTP
 import System.Directory
 
 import Text.Webrexp.GraphWalker
+import Text.Webrexp.IOMock
 import Text.Webrexp.Remote.MimeTypes
 import Text.Webrexp.ResourcePath
 import qualified Text.Webrexp.ProjectByteString as B
@@ -31,7 +31,7 @@ class (GraphWalker a rezPath) => PartialGraph a rezPath where
     -- | The real parsing function.
     -- The IO monad is only here to provide a way to log information
     -- TODO : find a better way.
-    parseResource :: (MonadIO m)
+    parseResource :: (IOMockable m, Monad m)
                   => Loggers m -> rezPath -> ParseableType -> B.ByteString 
                   -> m (Maybe a)
 
@@ -85,7 +85,7 @@ instance (PartialGraph a ResourcePath, PartialGraph b ResourcePath)
     deepValueOf (UnionRight a) = deepValueOf a
 
 parseUnion :: forall a b m.
-              ( MonadIO m, Functor m
+              ( IOMockable m, Functor m, Monad m
               , PartialGraph a ResourcePath
               , PartialGraph b ResourcePath )
            => Loggers m -> Maybe ParseableType -> ResourcePath -> B.ByteString
@@ -108,22 +108,26 @@ parseUnion loggers (Just parser) datapath binaryData =
 
 
 
-loadData :: ( MonadIO m, Functor m
+loadData :: ( IOMockable m, Functor m, Monad m
             , PartialGraph a ResourcePath
             , PartialGraph b ResourcePath )
          => Loggers m -> ResourcePath
          -> m (AccessResult (UnionNode a b) ResourcePath)
 loadData loggers@(logger, _errLog, verbose) datapath@(Local s) = do
     logger $ "Opening file : '" ++ s ++ "'"
-    realFile <- liftIO $ doesFileExist s
-    if not realFile
-       then do
+    realFile <- performIO $ doesFileExist s
+    case realFile of
+        Just True -> performIO (B.readFile s) >>=
+            
+            maybe (return AccessError)
+                  (\file -> do
+                        let kind = getParseKind s
+                        verbose $ "Found kind " ++ show kind ++ " for (" ++ s ++ ")"
+                        parseUnion loggers kind datapath file)
+
+        _    -> do
            verbose $ "Unable to open file : " ++ s
            return AccessError
-       else do file <- liftIO $ B.readFile s
-       	       let kind = getParseKind s
-       	       verbose $ "Found kind " ++ show kind ++ " for (" ++ s ++ ")"
-       	       parseUnion loggers kind datapath file
 
 loadData loggers@(logger, _, verbose) (Remote uri) = do
   logger $ "Downloading URL : '" ++ show uri ++ "'"

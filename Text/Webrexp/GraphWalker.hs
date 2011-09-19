@@ -25,8 +25,8 @@ module Text.Webrexp.GraphWalker
     , findFirstNamedPure
     ) where
 
+import Text.Webrexp.IOMock
 import Control.Applicative
-import Control.Monad.IO.Class
 import qualified Text.Webrexp.ProjectByteString as B
 
 -- | Represent the path used to find the node
@@ -55,7 +55,7 @@ class (Show a) => GraphPath a where
 
     -- | Move semantic, try to dump the pointed
     -- resource to the current folder.
-    dumpDataAtPath :: (Monad m, MonadIO m)
+    dumpDataAtPath :: (Monad m, IOMockable m)
                    => Loggers m -> a
                    -> m ()
 
@@ -94,7 +94,7 @@ class (GraphPath rezPath, Eq a)
 
     -- | Get all the children of the current
     -- node.
-    childrenOf :: (MonadIO m) => a -> m [a]
+    childrenOf :: (IOMockable m, Monad m) => a -> m [a]
 
     -- | Retrieve the value of the tag (textual)
     valueOf :: a -> String
@@ -109,7 +109,7 @@ class (GraphPath rezPath, Eq a)
     -- resource, so an updated name can be given.
     -- The given function is there to log information,
     -- the second is to log errors
-    accessGraph :: (MonadIO m, Functor m)
+    accessGraph :: (IOMockable m, Functor m, Monad m)
                 => Loggers m -> rezPath -> m (AccessResult a rezPath)
 
     -- | Tell if the history associated is fixed or not.
@@ -120,14 +120,14 @@ class (GraphPath rezPath, Eq a)
 
     -- | Like value of, but force the node to collect the
     -- value of all it's children in the process.
-    deepValueOf :: (MonadIO m, Functor m) => a -> m String
+    deepValueOf :: (IOMockable m, Functor m, Monad m) => a -> m String
     deepValueOf node = (valueOf node ++) <$> childrenText
         where childrenText = concat <$> (childrenOf node >>= mapM deepValueOf)
 
 -- | Return a list of all the "children"/linked node of a given node.
 -- The given node is not included in the list.
 -- A list of node with the taken path is returned.
-descendants :: (MonadIO m, GraphWalker a r) => a -> m [(a, [(a, Int)])]
+descendants :: (IOMockable m, Monad m, GraphWalker a r) => a -> m [(a, [(a, Int)])]
 descendants node = findDescendants (node, [])
    where findDescendants (a, hist) = do
              children <- childrenOf a
@@ -144,7 +144,7 @@ descendants node = findDescendants (node, [])
 -- the returned list must contain : the node itself if
 -- it match the name, and all the children containing the
 -- good name.
-findNamed :: (Functor m, MonadIO m, GraphWalker a r)
+findNamed :: (Functor m, Monad m, IOMockable m, GraphWalker a r)
           => String -> a -> m [(a, [(a, Int)])]
 findNamed name node = if nameOf node == Just name
                          then ((node, []) :) <$> validChildren
@@ -153,7 +153,7 @@ findNamed name node = if nameOf node == Just name
                        <$> descendants node
 
 -- | Return the first found node if any.
-findFirstNamed :: (Functor m, MonadIO m, GraphWalker a r)
+findFirstNamed :: (Functor m, Monad m, IOMockable m, GraphWalker a r)
                => String -> [a] -> m (Maybe (a, [(a,Int)]))
 findFirstNamed name lst = do
     nameList <- mapM (findNamed name) lst

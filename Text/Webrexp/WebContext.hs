@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
 -- | This module define the state carryied during the webrexp
 -- evaluation. This state is implemented as a monad transformer
 -- on top of 'IO'.
@@ -88,6 +89,7 @@ import qualified Control.Exception as Ex
 
 import qualified Text.Webrexp.ProjectByteString as B
 import Text.Webrexp.GraphWalker
+import Text.Webrexp.IOMock
 
 -- | Typical use of the WebContextT monad transformer
 -- allowing to download information
@@ -380,14 +382,14 @@ executeWithEmptyContext val = do
     return $ gatheredData context
 
 -- | Return normal, error, verbose logger
-prepareLogger :: (Monad m, MonadIO m)
+prepareLogger :: (Monad m, IOMockable (WebContextT node rezPath m))
               => WebContextT node rezPath m 
-                    (Logger (WebContextT node rezPath IO)
-                    ,Logger (WebContextT node rezPath IO)
-                    ,Logger (WebContextT node rezPath IO))
+                    (Logger (WebContextT node rezPath m)
+                    ,Logger (WebContextT node rezPath m)
+                    ,Logger (WebContextT node rezPath m))
 prepareLogger = WebContextT $ \c ->
     let silenceLog _ = return ()
-        errLog = liftIO . hPutStrLn stderr
+        errLog msg = performIO (hPutStrLn stderr msg) >> return ()
         normalLog = textOutput
     in case (mustGatherData c, logLevel c) of
       (True, _) -> return ((silenceLog, gatheringLog . Left, silenceLog), c)
@@ -397,28 +399,31 @@ prepareLogger = WebContextT $ \c ->
 
 -- | Debugging function, only displayed in verbose
 -- logging mode.
-debugLog :: String -> WebCrawler node rezPath ()
+debugLog :: (IOMockable (WebContextT node rezPath m), Monad m)
+         => String -> WebContextT node rezPath m ()
 debugLog str = do
     verb <- isVerbose
-    when verb (liftIO $ putStrLn str)
+    when verb (performIO (putStrLn str) >> return ())
 
 
 -- | If a webrexp output some text, it must go through
 -- this function. It ensure the writting in the correct
 -- file.
-textOutput :: String -> WebCrawler node rezPath ()
+textOutput :: (Monad m, IOMockable (WebContextT node rezPath m)) 
+           => String -> WebContextT node rezPath m ()
 textOutput str = do
     direct <- isDataOutputedDirectly 
     if not direct
        then gatheringLog $ Right str
        else do handle <- getOutput
-               liftIO $ Ex.catch (hPutStr handle str)
+               _ <- performIO $ Ex.catch (hPutStr handle str)
                        (\e -> hPutStrLn stderr $ "Writing error : " ++ 
                                                 show (e :: IOException))
+               return ()
 
 -- | Keep track of an error or a normal log in the application monad
 -- transformer.
-gatheringLog :: Either String String -> WebCrawler node rezPath ()
+gatheringLog :: (Monad m) => Either String String -> WebContextT node rezPath m ()
 gatheringLog d = WebContextT $ \c ->
     return ((), c { gatheredData = gatheredData c ++ [d] })
 

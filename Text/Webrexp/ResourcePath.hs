@@ -8,8 +8,8 @@ module Text.Webrexp.ResourcePath
     ) where
 
 import Text.Webrexp.GraphWalker
+import Text.Webrexp.IOMock
 import Control.Applicative
-import Control.Monad.IO.Class
 import Data.Maybe
 import Network.HTTP
 import Network.Browser
@@ -72,11 +72,15 @@ extractFileName :: ResourcePath -> String
 extractFileName (Remote a) = snd . splitFileName $ uriPath a
 extractFileName (Local c) = snd $ splitFileName c
 
-dumpResourcePath :: (Monad m, MonadIO m)
+dumpResourcePath :: (Monad m, IOMockable m)
                  => Loggers m -> ResourcePath -> m ()
 dumpResourcePath _ src@(Local source) = do
-    cwd <- liftIO getCurrentDirectory
-    liftIO . copyFile source $ cwd </> extractFileName src
+    maybeDirectory <- performIO getCurrentDirectory
+    case maybeDirectory of
+        Nothing -> return ()
+        Just cwd -> do
+            _ <- performIO . copyFile source $ cwd </> extractFileName src
+            return ()
 
 dumpResourcePath loggers@(logger,_,_) p@(Remote a) = do
   (_, rsp) <- downloadBinary loggers a
@@ -88,14 +92,15 @@ dumpResourcePath loggers@(logger,_,_) p@(Remote a) = do
                  
 
   logger $ "Downloading '" ++ show a ++ "' in '" ++ filename
-  liftIO . B.writeFile filename $ rspBody rsp
+  _ <- performIO . B.writeFile filename $ rspBody rsp
+  return ()
 
 -- | Helper function to grab a resource on internet and returning
 -- it's binary representation, and it's real place if any.
-downloadBinary :: (Monad m, MonadIO m)
+downloadBinary :: (Monad m, IOMockable m)
                => Loggers m -> URI -> m (URI, Response B.ByteString)
-downloadBinary (_, _errLog, _verbose) url =
-    liftIO . browse $ do
+downloadBinary (_, _errLog, _verbose) url = do
+    rez <- performIO . browse $ do
         setAllowRedirects True
         -- setErrHandler errLog
         -- TODO find a way to use that
@@ -103,5 +108,11 @@ downloadBinary (_, _errLog, _verbose) url =
         setOutHandler . const $ return ()
         setErrHandler . const $ return ()
         request $ defaultGETRequest_ url
+    case rez of
+        Nothing -> return (url, Response { rspCode = (4, 0, 4)
+                                         , rspReason = "Not allowed" 
+                                         , rspHeaders = []
+                                         , rspBody = B.empty })
+        Just r -> return r
 
 

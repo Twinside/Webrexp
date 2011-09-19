@@ -6,10 +6,11 @@ module Text.Webrexp.DirectoryNode( DirectoryNode
                             ) where
 
 import Control.Exception
-import Control.Monad.IO.Class
+import Data.Maybe( fromMaybe )
 import System.Directory
 import System.FilePath
 
+import Text.Webrexp.IOMock
 import Text.Webrexp.GraphWalker
 import Text.Webrexp.ResourcePath
 import Text.Webrexp.UnionNode
@@ -102,7 +103,7 @@ instance GraphWalker DirectoryNode ResourcePath where
 
     childrenOf (File _ _) = return []
     childrenOf (Directory (FullPath path) _) =
-        liftIO $ listDirectory path
+         performIO (listDirectory path) >>= return . fromMaybe []
 
 
 

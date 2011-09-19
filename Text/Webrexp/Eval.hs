@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Text.Webrexp.Eval
     (
     -- * Functions
@@ -11,6 +12,7 @@ import Control.Monad
 import Data.List
 import Data.Maybe
 
+import Text.Webrexp.IOMock
 import Text.Webrexp.GraphWalker
 import Text.Webrexp.Exprtypes
 import Text.Webrexp.WebContext
@@ -18,11 +20,14 @@ import Text.Webrexp.Eval.Action
 
 -- | Given a node search for valid children, check for their
 -- validity against the requirement.
-searchRefIn :: (GraphWalker node rezPath)
+searchRefIn :: ( GraphWalker node rezPath
+               , IOMockable (WebContextT node rezPath m)
+               , Functor m
+               , Monad m )
             => Bool                         -- ^ Do we recurse?
             -> WebRef                       -- ^ Ref to find
             -> NodeContext node rezPath     -- ^ The root nood for the search
-            -> WebCrawler node rezPath
+            -> WebContextT node rezPath m
                         [NodeContext node rezPath]   -- ^ The found nodes.
 searchRefIn False Wildcard n = do
     children <- childrenOf $ this n
@@ -65,9 +70,10 @@ searchRefIn recurse (OfName  r s) n = do
 -- | Evaluate the leaf nodes of a webrexp, this way the code
 -- can be shared between the Breadth first evaluator and the
 -- Depth first one.
-evalWebRexpFor :: (GraphWalker node rezPath)
+evalWebRexpFor :: ( GraphWalker node rezPath
+                  , IOMockable (WebContextT node rezPath m) )
                => WebRexp -> EvalState node rezPath
-               -> WebCrawler node rezPath (Bool, [EvalState node rezPath])
+               -> WebContextT node rezPath m (Bool, [EvalState node rezPath])
 evalWebRexpFor (Str str) _ = do
     debugLog "> '\"...\"'"
     return (True, [Text str])
@@ -174,7 +180,7 @@ evalWebRexpFor (Range _ _) _ =
 
 downLinks :: (GraphWalker node rezPath)
           => rezPath
-          -> WebCrawler node rezPath [EvalState node rezPath]
+          -> WebContextT node rezPath m [EvalState node rezPath]
 downLinks path = do
     loggers <- prepareLogger
     down <- accessGraph loggers path
@@ -194,7 +200,7 @@ downLinks path = do
 --------------------------------------------------
 diggLinks :: (GraphWalker node rezPath)
           => EvalState node rezPath
-          -> WebCrawler node rezPath [EvalState node rezPath]
+          -> WebContextT node rezPath m [EvalState node rezPath]
 diggLinks (Node n) =
     concat <$> sequence
             [ downLinks $ rootRef n <//> indir
@@ -205,9 +211,10 @@ diggLinks (Text str) = case importPath str of
 diggLinks _ = return []
 
 -- | Let access sibling nodes with a predefined index.
-siblingAccessor :: (GraphWalker node rezPath)
+siblingAccessor :: ( GraphWalker node rezPath
+                   , IOMockable (WebContextT node rezPath m) )
                 => Int -> EvalState node rezPath
-                -> WebCrawler node rezPath
+                -> WebContextT node rezPath m
                              (Maybe (EvalState node rezPath))
 siblingAccessor 0   node@(Node _) = return $ Just node
 siblingAccessor idx (Node node)=

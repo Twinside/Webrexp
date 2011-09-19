@@ -5,7 +5,6 @@
 -- for node of HxT (Haskell Xml parser).
 module Text.Webrexp.HxtNode ( HxtNode ) where
 
-import Control.Monad.IO.Class
 import Data.Maybe
 import Data.Tree.NTree.TypeDefs
 import Network.HTTP
@@ -16,6 +15,7 @@ import Text.XML.HXT.Parser.HtmlParsec
 
 import qualified Text.Webrexp.ProjectByteString as B
 
+import Text.Webrexp.IOMock
 import Text.Webrexp.GraphWalker
 import Text.Webrexp.ResourcePath
 import Text.Webrexp.Remote.MimeTypes
@@ -93,17 +93,17 @@ parserOfKind (Just ParseableHTML) datapath =
 parserOfKind _ datapath = DataBlob datapath
 
 -- | Given a resource path, do the required loading
-loadHtml :: (MonadIO m)
+loadHtml :: (Monad m, IOMockable m)
          => Loggers m -> ResourcePath
          -> m (AccessResult HxtNode ResourcePath)
 loadHtml (logger, _errLog, _verbose) (Local s) = do
     logger $ "Opening file : '" ++ s ++ "'"
-    realFile <- liftIO $ doesFileExist s
-    if not realFile
-       then return AccessError
-       else do file <- liftIO $ readFile s
-       	       return . Result (Local s)
-                      $ parseToHTMLNode file
+    realFile <- performIO $ doesFileExist s
+    case realFile of
+        Just True -> performIO (readFile s) >>=
+            maybe (return AccessError)
+                  (return . Result (Local s) . parseToHTMLNode)
+        _         -> return AccessError
 
 loadHtml loggers@(logger, _,  verbose) datapath@(Remote uri) = do
   logger $ "Downloading URL : '" ++ show uri ++ "'"

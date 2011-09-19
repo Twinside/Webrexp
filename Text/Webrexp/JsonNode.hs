@@ -5,7 +5,6 @@ module Text.Webrexp.JsonNode( JsonNode ) where
 
 import Control.Arrow
 import Control.Applicative
-import Control.Monad.IO.Class
 import Data.Maybe( catMaybes )
 import qualified Data.Map as Map
 import Network.HTTP
@@ -14,6 +13,7 @@ import Text.JSON.AttoJSON
 
 import qualified Text.Webrexp.ProjectByteString as B
 
+import Text.Webrexp.IOMock
 import Text.Webrexp.GraphWalker
 import Text.Webrexp.ResourcePath
 import Text.Webrexp.UnionNode
@@ -58,8 +58,7 @@ instance GraphWalker JsonNode ResourcePath where
     valueOf (_, JSObject _) = ""
     valueOf (_, JSNull) = ""
 
-parseJson :: (MonadIO m)
-          => Loggers m -> ResourcePath -> B.ByteString
+parseJson :: (Monad m) => Loggers m -> ResourcePath -> B.ByteString
           -> m (AccessResult JsonNode ResourcePath)
 parseJson (_, errLog, _) datapath file =
     case parseJSON file of
@@ -68,16 +67,18 @@ parseJson (_, errLog, _) datapath file =
       Right valid -> return $ Result datapath (Nothing, valid)
 
 -- | Given a resource path, do the required loading
-loadJson :: (MonadIO m)
+loadJson :: (IOMockable m, Monad m)
          => Loggers m -> ResourcePath
          -> m (AccessResult JsonNode ResourcePath)
 loadJson loggers@(logger, _errLog, _verbose) datapath@(Local s) = do
     logger $ "Opening file : '" ++ s ++ "'"
-    realFile <- liftIO $ doesFileExist s
-    if not realFile
-       then return AccessError
-       else do file <- liftIO $ B.readFile s
-       	       parseJson loggers datapath file
+    realFile <- performIO $ doesFileExist s
+    case realFile of
+        Just True -> performIO (B.readFile s) >>=
+                maybe (return AccessError)
+                      (\file -> parseJson loggers datapath file)
+
+        _         -> return AccessError
 
 loadJson loggers@(logger, _, verbose) datapath@(Remote uri) = do
   logger $ "Downloading URL : '" ++ show uri ++ "'"

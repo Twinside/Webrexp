@@ -4,7 +4,6 @@
 module Text.Webrexp.HaXmlNode( HaXmLNode ) where
 
 import Control.Applicative
-import Control.Monad.IO.Class
 import Data.Maybe( catMaybes )
 import Data.List( find )
 import Network.HTTP
@@ -17,6 +16,7 @@ import System.Directory
 
 import qualified Text.Webrexp.ProjectByteString as B
 
+import Text.Webrexp.IOMock
 import Text.Webrexp.GraphWalker
 import Text.Webrexp.ResourcePath
 import Text.Webrexp.Remote.MimeTypes
@@ -81,17 +81,18 @@ parserOfKind (Just ParseableXML) datapath = \file ->
 parserOfKind (Just ParseableJson) datapath = DataBlob datapath
 
 -- | Given a resource path, do the required loading
-loadHtml :: (MonadIO m)
+loadHtml :: (Monad m, IOMockable m)
          => Loggers m -> ResourcePath
          -> m (AccessResult HaXmLNode ResourcePath)
 loadHtml (logger, _errLog, _verbose) datapath@(Local s) = do
     logger $ "Opening file : '" ++ s ++ "'"
-    realFile <- liftIO $ doesFileExist s
-    if not realFile
-       then return AccessError
-       else do file <- liftIO $ B.readFile s
-       	       let kind = getParseKind s
-       	       return $ parserOfKind kind datapath file
+    realFile <- performIO $ doesFileExist s
+    case realFile of
+        Just True -> performIO (B.readFile s) >>=
+            maybe (return AccessError)
+                  (let kind = getParseKind s 
+                   in return . parserOfKind kind datapath)
+        _         -> return AccessError
 
 loadHtml loggers@(logger, _, verbose) datapath@(Remote uri) = do
   logger $ "Downloading URL : '" ++ show uri ++ "'"

@@ -1,4 +1,5 @@
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Text.Webrexp.Eval.ActionFunc( ActionValue(..)
                               , ActionFunc
                               , ActionFuncM
@@ -13,13 +14,13 @@ module Text.Webrexp.Eval.ActionFunc( ActionValue(..)
                               ) where
 
 import Control.Applicative
-import Control.Monad.IO.Class
 import Data.Char
 import System.Process
 import System.Exit
 
 import Debug.Trace
 
+import Text.Webrexp.IOMock
 import Text.Webrexp.WebContext
 
 -- | Data used for the evaluation of actions. Represent the
@@ -38,10 +39,10 @@ type ActionFunc node rezPath
      -> Maybe (EvalState node rezPath) -- ^ Pipeline argument
      -> (ActionValue, Maybe (EvalState node rezPath)) -- ^ Result
 
-type ActionFuncM node rezPath
+type ActionFuncM node rezPath m
      = [ActionValue]                 -- ^ Argument list
      -> Maybe (EvalState node rezPath) -- ^ Pipeline argument
-     -> WebCrawler node rezPath
+     -> WebContextT node rezPath m
                     (ActionValue, Maybe (EvalState node rezPath)) -- ^ Result
 
 -- | Typecast operation, from :
@@ -159,11 +160,12 @@ substituteFunc [AString s, AString what, AString by] e =
     (AString $ substitute s what by, e)
 substituteFunc _ e = (ATypeError, e)
 
-funcSysCall :: ActionFuncM node rezPath
+funcSysCall :: (IOMockable (WebContextT node rezPath m), Monad m)
+            => ActionFuncM node rezPath m
 funcSysCall [AString s] e = do
-    code <- liftIO $ system s
+    code <- performIO $ system s
     case code of
-         ExitSuccess -> return (ABool True, e)
+         Just ExitSuccess -> return (ABool True, e)
          _ -> return (ABool False, e)
 funcSysCall _ e = return (ATypeError, e)
 
