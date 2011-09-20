@@ -17,14 +17,15 @@ import Text.Webrexp.IOMock
 import qualified Text.Webrexp.ProjectByteString as B
 
 binArith :: ( GraphWalker node rezPath
-            , IOMockable (WebContextT node rezPath m)
+            , IOMockable (WebContextT array node rezPath m)
             , Functor m
             , Monad m)
          => (ActionValue -> ActionValue -> ActionValue) -- ^ Function to cal result
          -> Maybe (EvalState node rezPath) -- Actually evaluated element
          -> ActionExpr       -- Left subaction (tree-like)
          -> ActionExpr      -- Right subaction (tree-like)
-         -> WebContextT node rezPath m (ActionValue, Maybe (EvalState node rezPath))
+         -> WebContextT array node rezPath m 
+                        (ActionValue, Maybe (EvalState node rezPath))
 binArith _ Nothing _ _ = return (ATypeError, Nothing)
 binArith f e sub1 sub2 = do
     (v1,e') <- evalAction sub1 e
@@ -70,19 +71,19 @@ isActionResultValid (AInt 0) = False
 isActionResultValid ATypeError = False
 isActionResultValid _ = True
 
-dumpActionVal :: (IOMockable (WebContextT node rezPath m), Monad m)
-              => ActionValue -> WebContextT node rezPath m ()
+dumpActionVal :: (IOMockable (WebContextT array node rezPath m), Monad m)
+              => ActionValue -> WebContextT array node rezPath m ()
 dumpActionVal (AString s) = textOutput s
 dumpActionVal (AInt i) = textOutput $ show i
 dumpActionVal _ = return ()
 
 dumpContent :: ( GraphWalker node rezPath
-               , IOMockable (WebContextT node rezPath m)
+               , IOMockable (WebContextT array node rezPath m)
                , Functor m
                , Monad m)
             => Bool     -- ^ If we convert recursively data.
             -> Maybe (EvalState node rezPath)   -- ^ Node to be dumped
-            -> WebContextT node rezPath m (ActionValue, Maybe (EvalState node rezPath))
+            -> WebContextT array node rezPath m (ActionValue, Maybe (EvalState node rezPath))
 dumpContent _ Nothing = return (ABool False, Nothing)
 dumpContent recursive e@(Just (Node ns)) =
   case (indirectLinks (this ns), recursive) of
@@ -103,12 +104,12 @@ dumpContent _ e@(Just (Blob b)) = do
 
 -- | Evaluate embedded action in WebRexp
 evalAction :: ( GraphWalker node rezPath
-              , IOMockable (WebContextT node rezPath m)
+              , IOMockable (WebContextT array node rezPath m)
               , Functor m
               , Monad m )
            => ActionExpr
            -> Maybe (EvalState node rezPath)
-           -> WebContextT node rezPath m
+           -> WebContextT array node rezPath m
                         (ActionValue, Maybe (EvalState node rezPath))
 evalAction (ActionExprs actions) e = do
     rez <- foldM eval (ABool True, e) actions
@@ -191,12 +192,12 @@ evalAction (Call BuiltinFormat subs) e = actionFunEval formatString subs e
 evalAction (Call BuiltinSubsitute subs) e = actionFunEval substituteFunc subs e
 evalAction (Call BuiltinSystem subs) e = actionFunEvalM funcSysCall subs e
 
-actionFunEval :: ( GraphWalker node rezPath, IOMockable (WebContextT node rezPath m)
+actionFunEval :: ( GraphWalker node rezPath, IOMockable (WebContextT array node rezPath m)
                  , Functor m
                  , Monad m )
               => ActionFunc node rezPath
               -> [ActionExpr] -> Maybe (EvalState node rezPath)
-              -> WebContextT node rezPath m
+              -> WebContextT array node rezPath m
                           (ActionValue, Maybe (EvalState node rezPath))
 actionFunEval f actions st =  do
     vals <- mapM (`evalAction` st) actions
@@ -207,12 +208,12 @@ actionFunEval f actions st =  do
 
 
 actionFunEvalM :: ( GraphWalker node rezPath
-                  , IOMockable (WebContextT node rezPath m)
+                  , IOMockable (WebContextT array node rezPath m)
                   , Functor m
                   , Monad m )
-               => ActionFuncM node rezPath m
+               => ActionFuncM array node rezPath m
                -> [ActionExpr] -> Maybe (EvalState node rezPath)
-               -> WebContextT node rezPath m
+               -> WebContextT array node rezPath m
                           (ActionValue, Maybe (EvalState node rezPath))
 actionFunEvalM f actions st = do
     vals <- mapM (`evalAction` st) actions

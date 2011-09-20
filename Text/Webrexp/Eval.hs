@@ -11,6 +11,8 @@ import Control.Applicative
 import Control.Monad
 import Data.List
 import Data.Maybe
+import Data.Array.MArray
+import qualified Data.Set as Set
 
 import Text.Webrexp.IOMock
 import Text.Webrexp.GraphWalker
@@ -21,13 +23,13 @@ import Text.Webrexp.Eval.Action
 -- | Given a node search for valid children, check for their
 -- validity against the requirement.
 searchRefIn :: ( GraphWalker node rezPath
-               , IOMockable (WebContextT node rezPath m)
+               , IOMockable (WebContextT array node rezPath m)
                , Functor m
                , Monad m )
             => Bool                         -- ^ Do we recurse?
             -> WebRef                       -- ^ Ref to find
             -> NodeContext node rezPath     -- ^ The root nood for the search
-            -> WebContextT node rezPath m
+            -> WebContextT array node rezPath m
                         [NodeContext node rezPath]   -- ^ The found nodes.
 searchRefIn False Wildcard n = do
     children <- childrenOf $ this n
@@ -71,9 +73,11 @@ searchRefIn recurse (OfName  r s) n = do
 -- can be shared between the Breadth first evaluator and the
 -- Depth first one.
 evalWebRexpFor :: ( GraphWalker node rezPath
-                  , IOMockable (WebContextT node rezPath m) )
+                  , IOMockable (WebContextT array node rezPath m)
+                  , Functor m
+                  , MArray array (Set.Set String) m)
                => WebRexp -> EvalState node rezPath
-               -> WebContextT node rezPath m (Bool, [EvalState node rezPath])
+               -> WebContextT array node rezPath m (Bool, [EvalState node rezPath])
 evalWebRexpFor (Str str) _ = do
     debugLog "> '\"...\"'"
     return (True, [Text str])
@@ -178,9 +182,12 @@ evalWebRexpFor (Alternative _ _) _ =
 evalWebRexpFor (Range _ _) _ =
      error "evalWebRexpFor - non terminal in terminal function."
 
-downLinks :: (GraphWalker node rezPath)
+downLinks :: ( GraphWalker node rezPath
+             , IOMockable (WebContextT array node rezPath m)
+             , Functor m, Monad m
+             )
           => rezPath
-          -> WebContextT node rezPath m [EvalState node rezPath]
+          -> WebContextT array node rezPath m [EvalState node rezPath]
 downLinks path = do
     loggers <- prepareLogger
     down <- accessGraph loggers path
@@ -198,9 +205,11 @@ downLinks path = do
 --------------------------------------------------
 ----            Helper functions
 --------------------------------------------------
-diggLinks :: (GraphWalker node rezPath)
+diggLinks :: (GraphWalker node rezPath
+             ,IOMockable (WebContextT array node rezPath m)
+             ,Functor m, Monad m)
           => EvalState node rezPath
-          -> WebContextT node rezPath m [EvalState node rezPath]
+          -> WebContextT array node rezPath m [EvalState node rezPath]
 diggLinks (Node n) =
     concat <$> sequence
             [ downLinks $ rootRef n <//> indir
@@ -212,9 +221,10 @@ diggLinks _ = return []
 
 -- | Let access sibling nodes with a predefined index.
 siblingAccessor :: ( GraphWalker node rezPath
-                   , IOMockable (WebContextT node rezPath m) )
+                   , IOMockable (WebContextT array node rezPath m) 
+                   , Monad m )
                 => Int -> EvalState node rezPath
-                -> WebContextT node rezPath m
+                -> WebContextT array node rezPath m
                              (Maybe (EvalState node rezPath))
 siblingAccessor 0   node@(Node _) = return $ Just node
 siblingAccessor idx (Node node)=

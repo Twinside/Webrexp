@@ -1,5 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 -- | This module define the state carryied during the webrexp
 -- evaluation. This state is implemented as a monad transformer
 -- on top of 'IO'.
@@ -82,7 +83,7 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Data.Functor.Identity
-import Data.Array.IO
+import Data.Array.MArray
 import qualified Data.Set as Set
 import Control.Exception( IOException )
 import qualified Control.Exception as Ex
@@ -93,10 +94,10 @@ import Text.Webrexp.IOMock
 
 -- | Typical use of the WebContextT monad transformer
 -- allowing to download information
-type WebCrawler node rezPath a = WebContextT node rezPath IO a
+type WebCrawler array node rezPath a = WebContextT array node rezPath IO a
 
 -- | WebContext is 'WebContextT' as a simple Monad
-type WebContext node rezPath a = WebContextT node rezPath Identity a
+type WebContext array node rezPath a = WebContextT array node rezPath Identity a
 
 -- | Record a graph path in a document, from the last indirect
 -- node to this one.
@@ -194,7 +195,7 @@ type ValidSeenCounter = Int
 type StateNumber = Int
 
 -- | Internal data context.
-data Context node rezPath = Context
+data Context array node rezPath = Context
     { -- | Context stack used in breadth-first evaluation
       contextStack :: [([EvalState node rezPath], Counter)]
 
@@ -208,10 +209,10 @@ data Context node rezPath = Context
 
       -- | Buckets used for uniqueness pruning, all
       -- evaluation kind.
-    , uniqueBucket :: IOArray Int (Set.Set String) 
+    , uniqueBucket :: array Int (Set.Set String)
 
       -- | Counters used for range evaluation in DFS
-    , countBucket :: IOUArray Int Counter
+    , countBucket :: array Int Counter
 
       -- | Tell if we must keep the found information in memory
       -- instead of directly dumping it on screen.
@@ -230,20 +231,20 @@ data Context node rezPath = Context
 --------------------------------------------------
 ----            Monad definitions
 --------------------------------------------------
-newtype (Monad m) => WebContextT node rezPath m a =
-    WebContextT { runWebContextT :: Context node rezPath
-                                 -> m (a, Context node rezPath ) }
+newtype (Monad m) => WebContextT array node rezPath m a =
+    WebContextT { runWebContextT :: Context array node rezPath
+                                 -> m (a, Context array node rezPath) }
 
-instance (Functor m, Monad m) => Functor (WebContextT node rezPath m) where
+instance (Functor m, Monad m) => Functor (WebContextT array node rezPath m) where
     {-# INLINE fmap #-}
     fmap f a = WebContextT $ \c ->
         fmap (first f) $ runWebContextT a c
 
-instance (Functor m, Monad m) => Applicative (WebContextT node rezPath m) where
+instance (Functor m, Monad m) => Applicative (WebContextT array node rezPath m) where
     pure = return
     (<*>) = ap
 
-instance (Monad m) => Monad (WebContextT node rezPath m) where
+instance (Monad m) => Monad (WebContextT array node rezPath m) where
     {-# INLINE return #-}
     return a =
         WebContextT $ \c -> return (a, c)
@@ -253,19 +254,22 @@ instance (Monad m) => Monad (WebContextT node rezPath m) where
         (val', c') <- val c
         runWebContextT (f val') c'
 
-instance MonadTrans (WebContextT node rezPath) where
+instance MonadTrans (WebContextT array node rezPath) where
     lift m = WebContextT $ \c -> do
         a <- m
         return (a, c)
 
-instance (MonadIO m) => MonadIO (WebContextT node rezPath m) where
+instance (MonadIO m) => MonadIO (WebContextT array node rezPath m) where
     liftIO = lift . liftIO
+
+instance IOMockable (WebContextT array node rezPath IO) where
+    performIO act = Just <$> liftIO act
 
 --------------------------------------------------
 ----            Context manipulation
 --------------------------------------------------
 
-emptyContext :: Context node rezPath
+emptyContext :: Context array node rezPath
 emptyContext = Context
     { contextStack = []
     , waitingStates = []
@@ -288,58 +292,58 @@ emptyContext = Context
 -- operations.
 --
 -- The value is stored but not used yet.
-setHttpDelay :: (Monad m) => Int -> WebContextT node rezPath m ()
+setHttpDelay :: (Monad m) => Int -> WebContextT array node rezPath m ()
 setHttpDelay delay = WebContextT $ \c ->
         return ((), c{ httpDelay = delay })
 
 -- | return the value set by 'setHttpDelay'
-getHttpDelay :: (Monad m) => WebContextT node rezPath m Int
+getHttpDelay :: (Monad m) => WebContextT array node rezPath m Int
 getHttpDelay = WebContextT $ \c -> return (httpDelay c, c)
 
 -- | Define the text output for written text.
-setOutput :: (Monad m) => Handle -> WebContextT node rezPath m ()
+setOutput :: (Monad m) => Handle -> WebContextT array node rezPath m ()
 setOutput handle = WebContextT $ \c ->
         return ((), c{ defaultOutput = handle })
 
 -- | Retrieve the default file output used for text.
-getOutput :: (Monad m) => WebContextT node rezPath m Handle
+getOutput :: (Monad m) => WebContextT array node rezPath m Handle
 getOutput = WebContextT $ \c -> return (defaultOutput c, c)
 
-isDataOutputedDirectly :: (Monad m) => WebContextT node rezPath m Bool
+isDataOutputedDirectly :: (Monad m) => WebContextT array node rezPath m Bool
 isDataOutputedDirectly = WebContextT $ \c ->
         return (not $ mustGatherData c, c)
 
 -- | Set the user agent which must be used for indirect operations
 --
 -- The value is stored but not used yet.
-setUserAgent :: (Monad m) => String -> WebContextT node rezPath m ()
+setUserAgent :: (Monad m) => String -> WebContextT array node rezPath m ()
 setUserAgent usr = WebContextT $ \c ->
     return ((), c{ httpUserAgent = usr })
 
 -- | return the value set by 'setUserAgent'
-getUserAgent :: (Monad m) => WebContextT node rezPath m String
+getUserAgent :: (Monad m) => WebContextT array node rezPath m String
 getUserAgent = WebContextT $ \c -> return (httpUserAgent c, c)
 
 -- | Set the value of the logging level.
-setLogLevel :: (Monad m) => LogLevel -> WebContextT node rezPath m ()
+setLogLevel :: (Monad m) => LogLevel -> WebContextT array node rezPath m ()
 setLogLevel lvl = WebContextT $ \c ->
     return ((), c{logLevel = lvl})
 
 -- | Tell if the current 'LoggingLevel' is set to 'Verbose'
-isVerbose :: (Monad m) => WebContextT node rezPath m Bool
+isVerbose :: (Monad m) => WebContextT array node rezPath m Bool
 isVerbose = WebContextT $ \c -> 
     return (logLevel c == Verbose, c)
 
 -- | TODO : write documentation
 accumulateCurrentState :: (Monad m)
                        => ([EvalState node rezPath], StateNumber)
-                       -> WebContextT node rezPath m ()
+                       -> WebContextT array node rezPath m ()
 accumulateCurrentState lst = WebContextT $ \c ->
         return ((), c{ contextStack = lst : contextStack c })
 
 -- | TODO : write documentation
 popAccumulation :: (Monad m)
-                => WebContextT node rezPath m ([EvalState node rezPath], StateNumber)
+                => WebContextT array node rezPath m ([EvalState node rezPath], StateNumber)
 popAccumulation = WebContextT $ \c ->
     case contextStack c of
          []     -> error "Empty context stack, implementation bug"
@@ -351,14 +355,14 @@ popAccumulation = WebContextT $ \c ->
 -- retrieval.
 pushCurrentState :: (Monad m)
                  => [EvalState node rezPath]
-                 -> WebContextT node rezPath m ()
+                 -> WebContextT array node rezPath m ()
 pushCurrentState lst = WebContextT $ \c ->
         return ((), c{ contextStack = (lst, 0) : contextStack c })
 
 -- | Inverse operation of 'pushCurrentState', retrieve
 -- stored nodes.
 popCurrentState :: (Monad m)
-                => WebContextT node rezPath m [EvalState node rezPath]
+                => WebContextT array node rezPath m [EvalState node rezPath]
 popCurrentState = WebContextT $ \c ->
     case contextStack c of
          []     -> error "Empty context stack, implementation bug"
@@ -368,7 +372,7 @@ popCurrentState = WebContextT $ \c ->
 -- | Helper function used to start the evaluation of a webrexp
 -- with a default context, with sane defaults.
 evalWithEmptyContext :: (Monad m)
-                     => WebContextT node rezPath m a -> m a
+                     => WebContextT array node rezPath m a -> m a
 evalWithEmptyContext val = do
     (finalVal, _context) <- runWebContextT val emptyContext
     return finalVal
@@ -376,17 +380,17 @@ evalWithEmptyContext val = do
 -- | Helper function used to evaluate a webrexp and get back
 -- data with a default context with sane defaults.
 executeWithEmptyContext :: (Monad m)
-                        => WebContextT node rezPath m a -> m [Either String String]
+                        => WebContextT array node rezPath m a -> m [Either String String]
 executeWithEmptyContext val = do
     (_, context) <- runWebContextT val (emptyContext { mustGatherData = True })
     return $ gatheredData context
 
 -- | Return normal, error, verbose logger
-prepareLogger :: (Monad m, IOMockable (WebContextT node rezPath m))
-              => WebContextT node rezPath m 
-                    (Logger (WebContextT node rezPath m)
-                    ,Logger (WebContextT node rezPath m)
-                    ,Logger (WebContextT node rezPath m))
+prepareLogger :: (Monad m, IOMockable (WebContextT array node rezPath m))
+              => WebContextT array node rezPath m 
+                    (Logger (WebContextT array node rezPath m)
+                    ,Logger (WebContextT array node rezPath m)
+                    ,Logger (WebContextT array node rezPath m))
 prepareLogger = WebContextT $ \c ->
     let silenceLog _ = return ()
         errLog msg = performIO (hPutStrLn stderr msg) >> return ()
@@ -399,8 +403,8 @@ prepareLogger = WebContextT $ \c ->
 
 -- | Debugging function, only displayed in verbose
 -- logging mode.
-debugLog :: (IOMockable (WebContextT node rezPath m), Monad m)
-         => String -> WebContextT node rezPath m ()
+debugLog :: (IOMockable (WebContextT array node rezPath m), Monad m)
+         => String -> WebContextT array node rezPath m ()
 debugLog str = do
     verb <- isVerbose
     when verb (performIO (putStrLn str) >> return ())
@@ -409,8 +413,8 @@ debugLog str = do
 -- | If a webrexp output some text, it must go through
 -- this function. It ensure the writting in the correct
 -- file.
-textOutput :: (Monad m, IOMockable (WebContextT node rezPath m)) 
-           => String -> WebContextT node rezPath m ()
+textOutput :: (Monad m, IOMockable (WebContextT array node rezPath m)) 
+           => String -> WebContextT array node rezPath m ()
 textOutput str = do
     direct <- isDataOutputedDirectly 
     if not direct
@@ -423,7 +427,7 @@ textOutput str = do
 
 -- | Keep track of an error or a normal log in the application monad
 -- transformer.
-gatheringLog :: (Monad m) => Either String String -> WebContextT node rezPath m ()
+gatheringLog :: (Monad m) => Either String String -> WebContextT array node rezPath m ()
 gatheringLog d = WebContextT $ \c ->
     return ((), c { gatheredData = gatheredData c ++ [d] })
 
@@ -434,13 +438,13 @@ gatheringLog d = WebContextT $ \c ->
 
 -- | Record a node in the context for the DFS evaluation.
 recordNode :: (Monad m) 
-           => (EvalState node rezPath, StateNumber) -> WebContextT node rezPath m ()
+           => (EvalState node rezPath, StateNumber) -> WebContextT array node rezPath m ()
 recordNode n = WebContextT $ \c ->
     return ((), c{ waitingStates = n : waitingStates c })
 
 -- | Get the last record from the top of the stack
 popLastRecord :: (Monad m)
-              => WebContextT node rezPath m (EvalState node rezPath, StateNumber)
+              => WebContextT array node rezPath m (EvalState node rezPath, StateNumber)
 popLastRecord = WebContextT $ \c ->
     case waitingStates c of
       [] -> error "popLAst Record - Empty stack!!!"
@@ -460,14 +464,16 @@ popLastRecord = WebContextT $ \c ->
 -- for other frame manipulation functions.
 pushToBranchContext :: (Monad m)
                     => (EvalState node rezPath, SeenCounter, ValidSeenCounter)
-                    -> WebContextT node rezPath m ()
+                    -> WebContextT array node rezPath m ()
 pushToBranchContext cont = WebContextT $ \c ->
     return ((), c{ branchContext = cont : branchContext c })
 
 -- | Retrieve the frame on the top of the stack.
 -- for more information regarding frames see 'pushToBranchContext'
 popBranchContext :: (Monad m)
-                 => WebContextT node rezPath m (EvalState node rezPath, SeenCounter, ValidSeenCounter)
+                 => WebContextT array node rezPath m ( EvalState node rezPath
+                                                     , SeenCounter
+                                                     , ValidSeenCounter )
 popBranchContext = WebContextT $ \c ->
     case branchContext c of
       [] -> error "popBranchContext - empty branch context"
@@ -478,7 +484,8 @@ popBranchContext = WebContextT $ \c ->
 --
 -- for more information regarding frames see 'pushToBranchContext'
 addToBranchContext :: (Monad m)
-                   => SeenCounter -> ValidSeenCounter -> WebContextT node rezPath m ()
+                   => SeenCounter -> ValidSeenCounter 
+                   -> WebContextT array node rezPath m ()
 addToBranchContext count validCount = WebContextT $ \c ->
     case branchContext c of
       [] -> error "addToBranchContext - empty context stack"
@@ -495,23 +502,26 @@ addToBranchContext count validCount = WebContextT $ \c ->
 -- Inform the monad of the number of 'Unique' bucket in the
 -- expression, permitting the allocation of the required number
 -- of Set to hold them.
-setBucketCount :: (Monad m, MonadIO m)
+setBucketCount :: ( Monad m
+                  , MArray array Counter m
+                  , MArray array (Set.Set String) m
+                  )
                => Int -- ^ Unique bucket count
                -> Int -- ^ Range counter count
-               -> WebContextT node rezPath m ()
+               -> WebContextT array node rezPath m ()
 setBucketCount uniquecount rangeCount = WebContextT $ \c -> do
-    arr <- liftIO $ newArray (0, uniquecount - 1) Set.empty
-    counter <- liftIO $ newArray (0, rangeCount - 1) 0
-    return ((), c{ uniqueBucket = arr
-                 , countBucket = counter })
+    setArray <- newArray (0, uniquecount - 1) Set.empty
+    counterArray <- newArray (0, rangeCount - 1) 0
+    return ((), c{ uniqueBucket = setArray
+                 , countBucket = counterArray } )
 
 -- | Used for node range, return the current value of the
 -- counter and increment it.
-incrementGetRangeCounter :: (Monad m, MonadIO m)
-                         => Int -> WebContextT node rezPath m Int
+incrementGetRangeCounter :: (Monad m, MArray array Counter m)
+                         => Int -> WebContextT array node rezPath m Int
 incrementGetRangeCounter bucket = WebContextT $ \c -> do
-    num <- liftIO $ countBucket c `readArray`bucket
-    liftIO . (countBucket c `writeArray` bucket) $ num + 1
+    num <- countBucket c `readArray` bucket
+    writeArray (countBucket c) bucket $ num + 1
     return (num, c)
 
 -- | Tell if a string has already been recorded for a bucket ID.
@@ -519,19 +529,19 @@ incrementGetRangeCounter bucket = WebContextT $ \c -> do
 --
 -- Return False, unless 'setResourceVisited' has been called with the same
 -- string before.
-hasResourceBeenVisited :: (Monad m, MonadIO m)
-                       => Int -> String -> WebContextT node rezPath m Bool
+hasResourceBeenVisited :: (Monad m, MArray array (Set.Set String) m)
+                       => Int -> String -> WebContextT array node rezPath m Bool
 hasResourceBeenVisited bucketId str = WebContextT $ \c -> do
-    set <- liftIO $ uniqueBucket c `readArray`bucketId
+    set <- uniqueBucket c `readArray` bucketId
     return (str `Set.member` set, c)
 
 -- | Record the visit of a string. 'hasResourceBeenVisited' will return True
 -- for the same string after this call.
-setResourceVisited :: (Monad m, MonadIO m)
-                   => Int -> String -> WebContextT node rezPath m ()
+setResourceVisited :: (Monad m, MArray array (Set.Set String) m)
+                   => Int -> String -> WebContextT array node rezPath m ()
 setResourceVisited bucketId str = WebContextT $ \c -> do
-    set <- liftIO $ uniqueBucket c `readArray` bucketId
+    set <- uniqueBucket c `readArray` bucketId
     let newSet = str `Set.insert` set
-    liftIO $ (uniqueBucket c `writeArray`bucketId) newSet
+    writeArray (uniqueBucket c) bucketId newSet
     return ((), c)
 

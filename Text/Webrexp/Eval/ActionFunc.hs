@@ -39,10 +39,10 @@ type ActionFunc node rezPath
      -> Maybe (EvalState node rezPath) -- ^ Pipeline argument
      -> (ActionValue, Maybe (EvalState node rezPath)) -- ^ Result
 
-type ActionFuncM node rezPath m
+type ActionFuncM array node rezPath m
      = [ActionValue]                 -- ^ Argument list
      -> Maybe (EvalState node rezPath) -- ^ Pipeline argument
-     -> WebContextT node rezPath m
+     -> WebContextT array node rezPath m
                     (ActionValue, Maybe (EvalState node rezPath)) -- ^ Result
 
 -- | Typecast operation, from :
@@ -160,8 +160,8 @@ substituteFunc [AString s, AString what, AString by] e =
     (AString $ substitute s what by, e)
 substituteFunc _ e = (ATypeError, e)
 
-funcSysCall :: (IOMockable (WebContextT node rezPath m), Monad m)
-            => ActionFuncM node rezPath m
+funcSysCall :: (IOMockable (WebContextT array node rezPath m), Monad m)
+            => ActionFuncM array node rezPath m
 funcSysCall [AString s] e = do
     code <- performIO $ system s
     case code of

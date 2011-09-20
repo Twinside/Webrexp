@@ -1,5 +1,6 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Text.Webrexp.WebRexpAutomata ( -- * Types
                                  Automata
                                , StateIndex
@@ -18,13 +19,16 @@ module Text.Webrexp.WebRexpAutomata ( -- * Types
 
 import Control.Monad
 import Data.Array
+import Data.Array.MArray
 import qualified Data.Array.Unboxed as U
+import qualified Data.Set as Set
 import System.IO
 
 import Text.Webrexp.Eval
 import Text.Webrexp.GraphWalker
 import Text.Webrexp.WebContext
 import Text.Webrexp.Exprtypes
+import Text.Webrexp.IOMock
 
 import Language.Haskell.TH.Syntax
 
@@ -309,9 +313,13 @@ toAutomata rest@Parent  free (onTrue, onFalse) =
 --------------------------------------------------
 
 -- | Simple function performing a depth first evaluation
-evalDepthFirst :: (GraphWalker node rezPath)
+evalDepthFirst :: ( GraphWalker node rezPath
+                  , IOMockable (WebContextT array node rezPath m)
+                  , MArray array (Set.Set String) m
+                  , MArray array Counter m 
+                  , Functor m )
                => EvalState node rezPath -> WebRexp
-               -> WebCrawler node rezPath Bool
+               -> WebContextT array node rezPath m Bool
 evalDepthFirst initialState expr = do
     debugLog $ "[Depth first, starting at " ++ show begin ++ "]"
     setBucketCount count rangeCount
@@ -321,12 +329,17 @@ evalDepthFirst initialState expr = do
               (count, rangeCount, neorexp) = assignWebrexpIndices expr
 
 -- | Main Evaluation function
-evalAutomataDFS :: (GraphWalker node rezPath)
-             => Automata                 -- ^ Automata to evaluate
-             -> StateIndex               -- ^ State to evaluate
-             -> Bool                     -- ^ Are we coming from a true link.
-             -> EvalState node rezPath   -- ^ Current evaluated element
-             -> WebCrawler node rezPath Bool
+evalAutomataDFS :: ( GraphWalker node rezPath
+                   , IOMockable (WebContextT array node rezPath m)
+                   , MArray array (Set.Set String) m
+                   , MArray array Counter m
+                   , Functor m
+                   , Monad m )
+                => Automata                 -- ^ Automata to evaluate
+                -> StateIndex               -- ^ State to evaluate
+                -> Bool                     -- ^ Are we coming from a true link.
+                -> EvalState node rezPath   -- ^ Current evaluated element
+                -> WebContextT array node rezPath m Bool
 evalAutomataDFS auto i fromTrue e
     | i < 0 = return fromTrue
     | otherwise = do
@@ -335,20 +348,29 @@ evalAutomataDFS auto i fromTrue e
                     (autoStates auto ! i) fromTrue e
 
 -- | Pop a record and start evaluation for him.
-scheduleNextElement :: (GraphWalker node rezPath)
-                    => Automata -> WebCrawler node rezPath Bool
+scheduleNextElement :: ( GraphWalker node rezPath
+                       , IOMockable (WebContextT array node rezPath m)
+                       , MArray array (Set.Set String) m
+                       , MArray array Counter m
+                       , Monad m, Functor m )
+                    => Automata -> WebContextT array node rezPath m Bool
 scheduleNextElement a = do
     (e, idx) <- popLastRecord
     evalAutomataDFS a idx True e
 
 
 -- | Evaluation function for an element.
-evalStateDFS :: (GraphWalker node rezPath)
-                  => Automata       -- ^ Evaluation automata
-                  -> AutomataState  -- ^ Current state in the automata
-                  -> Bool           -- ^ If we are coming from a True link or a False one
-                  -> EvalState node rezPath -- ^ Currently evaluated element
-                  -> WebCrawler node rezPath Bool
+evalStateDFS :: ( GraphWalker node rezPath
+                , IOMockable (WebContextT array node rezPath m)
+                , MArray array Counter m
+                , MArray array (Set.Set String) m
+                , Functor m
+                , Monad m)
+             => Automata       -- ^ Evaluation automata
+             -> AutomataState  -- ^ Current state in the automata
+             -> Bool           -- ^ If we are coming from a True link or a False one
+             -> EvalState node rezPath -- ^ Currently evaluated element
+             -> WebContextT array node rezPath m Bool
 evalStateDFS a (AutoState (Gather _) onTrue onFalse) valid e = do
     debugLog "> Gather"
     evalAutomataDFS a (if valid then onTrue else onFalse) valid e
@@ -430,9 +452,14 @@ evalStateDFS a (AutoState (AutoSimple rexp) onTrue onFalse) _ e = do
 
 -- | Main function to evaluate the expression in breadth
 -- first order.
-evalBreadthFirst :: (GraphWalker node rezPath)
+evalBreadthFirst :: ( GraphWalker node rezPath
+                    , IOMockable (WebContextT array node rezPath m)
+                    , MArray array (Set.Set String) m
+                    , MArray array Counter m
+                    , Functor m
+                    )
                  => EvalState node rezPath -> WebRexp
-                 -> WebCrawler node rezPath Bool
+                 -> WebContextT array node rezPath m Bool
 evalBreadthFirst initialState expr = do
     debugLog $ "[Breadth first, starting at " ++ show begin ++ "]"
     setBucketCount count 0
@@ -441,12 +468,16 @@ evalBreadthFirst initialState expr = do
               begin = beginState auto
               (count, _, neorexp) = assignWebrexpIndices expr
 
-evalAutomataBFS :: (GraphWalker node rezPath)
+evalAutomataBFS :: ( GraphWalker node rezPath
+                   , IOMockable (WebContextT array node rezPath m)
+                   , MArray array (Set.Set String) m
+                   , Functor m, Monad m
+                   )
                 => Automata                 -- ^ Automata to evaluate
                 -> StateIndex               -- ^ State to evaluate
                 -> Bool                     -- ^ Are we coming from a true link.
                 -> [EvalState node rezPath] -- ^ Current evaluated element
-                -> WebCrawler node rezPath Bool
+                -> WebContextT array node rezPath m Bool
 evalAutomataBFS auto i fromTrue e
     | i < 0 = return fromTrue
     | otherwise = do
@@ -456,12 +487,16 @@ evalAutomataBFS auto i fromTrue e
 
 
 -- | Main evaluation function for BFS evaluation.
-evalStateBFS :: (GraphWalker node rezPath)
+evalStateBFS :: ( GraphWalker node rezPath
+                , IOMockable (WebContextT array node rezPath m)
+                , MArray array (Set.Set String) m
+                , Functor m
+                )
              => Automata       -- ^ Evaluation automata
              -> AutomataState  -- ^ Current state in the automata
              -> Bool           -- ^ If we are coming from a True link or a False one
              -> [EvalState node rezPath]   -- ^ Currently evaluated elements
-             -> WebCrawler node rezPath Bool
+             -> WebContextT array node rezPath m Bool
 
 evalStateBFS a (AutoState (Gather idxs) onTrue onFalse) valid e = do
     debugLog "> Gather"

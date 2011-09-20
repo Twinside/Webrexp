@@ -20,6 +20,8 @@ import Text.Parsec
 import System.IO
 import System.Exit
 
+import Data.Array.IO
+
 import Text.Webrexp.Exprtypes
 import Text.Webrexp.Parser( webRexpParser )
 
@@ -31,7 +33,6 @@ import Text.Webrexp.DirectoryNode
 
 import Text.Webrexp.ResourcePath
 import Text.Webrexp.WebContext
-
 import Text.Webrexp.WebRexpAutomata
 
 data Conf = Conf
@@ -63,8 +64,7 @@ type CrawledNode =
     UnionNode (UnionNode  HxtNode  HaXmLNode)
               (UnionNode JsonNode DirectoryNode)
 
-type Crawled a =
-            WebCrawler CrawledNode ResourcePath a
+type Crawled a = WebCrawler IOArray CrawledNode ResourcePath a
 
 initialState :: IO (EvalState CrawledNode ResourcePath)
 initialState = do
