@@ -80,6 +80,7 @@ import System.IO
 import Control.Applicative
 import Control.Arrow( first )
 import Control.Monad
+import Control.Monad.ST
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Data.Functor.Identity
@@ -264,6 +265,9 @@ instance (MonadIO m) => MonadIO (WebContextT array node rezPath m) where
 
 instance IOMockable (WebContextT array node rezPath IO) where
     performIO act = Just <$> liftIO act
+
+instance IOMockable (WebContextT array node rezPath (ST s)) where
+    performIO _ = return Nothing
 
 --------------------------------------------------
 ----            Context manipulation

@@ -1,8 +1,13 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 -- | Generic module for using Webrexp as a user.
 module Text.Webrexp ( 
+                 ParseableType( .. )
+               -- * In memory evaluation
+               , queryDocument
+               , queryDocumentM
+
                -- * Default evaluation
-                 evalWebRexp
+               , evalWebRexp
                , evalWebRexpDepthFirst 
                , parseWebRexp
                , evalParsedWebRexp
@@ -16,10 +21,12 @@ module Text.Webrexp (
 
 import Control.Monad
 import Control.Monad.IO.Class
+import Control.Monad.ST
 import Text.Parsec
 import System.IO
 import System.Exit
 
+import Data.Array.ST
 import Data.Array.IO
 
 import Text.Webrexp.Exprtypes
@@ -31,9 +38,12 @@ import Text.Webrexp.JsonNode
 import Text.Webrexp.UnionNode
 import Text.Webrexp.DirectoryNode
 
+import Text.Webrexp.GraphWalker
 import Text.Webrexp.ResourcePath
 import Text.Webrexp.WebContext
 import Text.Webrexp.WebRexpAutomata
+import Text.Webrexp.Remote.MimeTypes
+import qualified Text.Webrexp.ProjectByteString as B
 
 data Conf = Conf
     { hammeringDelay :: Int
@@ -65,11 +75,33 @@ type CrawledNode =
               (UnionNode JsonNode DirectoryNode)
 
 type Crawled a = WebCrawler IOArray CrawledNode ResourcePath a
+type MemoryCrawl s a = WebContextT (STArray s) CrawledNode ResourcePath (ST s) a
 
 initialState :: IO (EvalState CrawledNode ResourcePath)
 initialState = do
     node <- currentDirectoryNode 
     return . Node $ repurposeNode (UnionRight . UnionRight) node
+
+queryDocument :: ParseableType -> B.ByteString -> WebRexp -> [Either String String]
+queryDocument docType str query = runST $ queryDocumentM docType str query
+
+queryDocumentM :: forall s . ParseableType -> B.ByteString -> WebRexp 
+               -> ST s [Either String String]
+queryDocumentM docType str query = executeWithEmptyContext todo
+    where ignoreLog _ = return ()
+          loggers = (ignoreLog, ignoreLog, ignoreLog)
+          todo :: MemoryCrawl s Bool
+          todo = do
+            initialNode <- parseUnion loggers (Just docType) (Local "") str
+            case initialNode of
+                AccessError -> return False
+                DataBlob _ _ -> return False
+                Result rezPath a -> 
+                    let initNode = NodeContext { rootRef = rezPath
+                                               , this = a
+                                               , parents = ImmutableHistory [] }
+                    in do setLogLevel Quiet
+                          evalDepthFirst (Node initNode) query
 
 -- | Prepare a webrexp.
 -- This function is useful if the expression has

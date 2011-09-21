@@ -8,7 +8,7 @@
 -- | This module has for aim to create new node type by combining
 -- different GraphWalkers. The idea is to be able to walk from an
 -- XML file to a Json file and so forth.
-module Text.Webrexp.UnionNode( PartialGraph( .. ), UnionNode ( .. ) ) where
+module Text.Webrexp.UnionNode( PartialGraph( .. ), UnionNode ( .. ), parseUnion ) where
 
 import Control.Applicative
 import Network.HTTP
@@ -84,6 +84,7 @@ instance (PartialGraph a ResourcePath, PartialGraph b ResourcePath)
     deepValueOf (UnionLeft a) = deepValueOf a
     deepValueOf (UnionRight a) = deepValueOf a
 
+-- | Function which can be used to bootstrap an in-memory parsing.
 parseUnion :: forall a b m.
               ( IOMockable m, Functor m, Monad m
               , PartialGraph a ResourcePath
