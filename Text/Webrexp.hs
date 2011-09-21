@@ -1,14 +1,16 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 -- | Generic module for using Webrexp as a user.
+-- the main functions for the user are queryDocument to perform an in-memory
+-- evaluation, and evalWebRexpDepthFirst
 module Text.Webrexp ( 
-                 ParseableType( .. )
                -- * In memory evaluation
+                 ParseableType( .. )
                , queryDocument
                , queryDocumentM
 
                -- * Default evaluation
                , evalWebRexp
-               , evalWebRexpDepthFirst 
+               , evalWebRexpDepthFirst
                , parseWebRexp
                , evalParsedWebRexp
                , executeParsedWebRexp 
@@ -82,9 +84,24 @@ initialState = do
     node <- currentDirectoryNode 
     return . Node $ repurposeNode (UnionRight . UnionRight) node
 
+-- | Query a document in memory and retrieve the results, you can use it in combination
+-- to the quasiquoting facility to embed the webrexp in haskell :
+--
+-- > {-# LANGUAGE QuasiQuotes #-}
+-- > import Text.Webrexp
+-- > import Text.Webrexp.Quote
+-- > import qualified Data.ByteString.Char8 as B
+-- >
+-- > main :: IO ()
+-- > main = print $ queryDocument ParseableJson document [webrexpParse| some things [.] |]
+-- >     where document = B.pack "{ \"some\": { \"things\": \"a phrase\" } }"
+-- 
+-- The returned values contain possible errors as 'Left' and real value as 'Right.
+--
 queryDocument :: ParseableType -> B.ByteString -> WebRexp -> [Either String String]
 queryDocument docType str query = runST $ queryDocumentM docType str query
 
+-- | Exactly same thing as 'queryDocument', but in ST
 queryDocumentM :: forall s . ParseableType -> B.ByteString -> WebRexp 
                -> ST s [Either String String]
 queryDocumentM docType str query = executeWithEmptyContext todo
@@ -130,6 +147,8 @@ executeParsedWebRexp wexpr = executeWithEmptyContext crawled
 evalWebRexp :: String -> IO Bool
 evalWebRexp = evalWebRexpWithEvaluator $ evalBreadthFirst (Text "")
 
+-- | Evaluate a webrexp in depth first fashion, returning a success
+-- status telling if the evaluation got up to the end.
 evalWebRexpDepthFirst :: String -> IO Bool
 evalWebRexpDepthFirst = evalWebRexpWithEvaluator $ evalDepthFirst (Text "")
 
@@ -147,6 +166,7 @@ evalWebRexpWithEvaluator evaluator str =
         let crawled :: Crawled Bool = evaluator wexpr
         in evalWithEmptyContext crawled
 
+-- | Function used in the command line program.
 evalWebRexpWithConf :: Conf -> IO Bool
 evalWebRexpWithConf conf =
   case runParser webRexpParser () "expr" (expr conf) of

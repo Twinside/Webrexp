@@ -9,9 +9,15 @@ import Language.Haskell.TH.Syntax
 import Text.Webrexp
 import Text.Webrexp.WebRexpAutomata 
 
--- | QuasiQuotation to transform a wabrexp to
--- it's AST representation, resulting type is
--- :: WebRexp 
+-- | QuasiQuotation to transform a webrexp to
+-- it's AST representation, resulting type is :: Webrexp.
+-- You can use it the following way :
+--
+-- > {-# LANGUAGE QuasiQuotes #-}
+-- > import Text.Webrexp.Quote
+-- >
+-- > [webrexpParse| some webrexp [.] |]
+--
 webrexpParse :: QuasiQuoter
 webrexpParse = QuasiQuoter 
         { quoteExp = parser
@@ -25,6 +31,14 @@ parser s = case parseWebRexp s of
     Nothing -> fail "Invalid webrexp syntax"
     Just w -> lift w
 
+-- | Quasi quote to transform a webrexp into it's compiled representation.
+-- You can use it the following way :
+--
+-- > {-# LANGUAGE QuasiQuotes #-}
+-- > import Text.Webrexp.Quote
+-- >
+-- > [webrexpCompile| some webrexp [.] |]
+--
 webrexpCompile :: QuasiQuoter
 webrexpCompile = QuasiQuoter 
         { quoteExp = compiler
