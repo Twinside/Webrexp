@@ -135,6 +135,12 @@ evalAction (NodeReplace sub) e = do
          AString s -> return (ABool True, Just $ Text s)
          ATypeError -> return (val, el)
          
+evalAction NodeNameOutputAction el@(Just (Node e)) =
+    return (maybe (AString "") AString . nameOf $ this e, el)
+
+evalAction NodeNameOutputAction (Just _) = return (ATypeError, Nothing)
+evalAction NodeNameOutputAction Nothing = return (ATypeError, Nothing)
+
 evalAction (CstI i) n = return (AInt i, n)
 evalAction (CstS s) n = return (AString s, n)
 evalAction OutputAction e = dumpContent False e

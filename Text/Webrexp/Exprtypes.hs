@@ -165,6 +165,9 @@ data ActionExpr =
     -- | Translate a node and all it's children into text.
     | DeepOutputAction
 
+    -- | Retrieve a node name
+    | NodeNameOutputAction
+
     -- | funcName(..., ...)
     | Call BuiltinFunc [ActionExpr]
     deriving (Eq, Show)
@@ -378,6 +381,7 @@ instance Lift BuiltinFunc where
 instance Lift ActionExpr where
     lift OutputAction = [| OutputAction |]
     lift DeepOutputAction = [| DeepOutputAction |]
+    lift NodeNameOutputAction = [| NodeNameOutputAction |]
     lift (ActionExprs lst) = [| ActionExprs lst |]
     lift (ARef str) = [| ARef str |]
     lift (CstI i) = [| CstI i |]

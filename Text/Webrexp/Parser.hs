@@ -49,7 +49,7 @@ lexer  = P.makeTokenParser
          (haskellStyle { P.reservedOpNames = [ "&", "|", "<", ">"
                                              , "*", "/", "+", "-"
                                              , "^", "=", "!", ":"
-                                             , "_", "$", "~"
+                                             , "_", "$", "~", "?"
                                              ]
                        , P.identStart = letter
                        } )
@@ -186,6 +186,7 @@ actionTerm = (CstI . fromIntegral <$> natural)
           <|> parens actionExpr
           <|> (CstS <$> stringLiteral)
           <|> (OutputAction <$ char '.')
+          <|> (NodeNameOutputAction <$ char '?')
           <|> (DeepOutputAction <$ char '#')
           <|> actionCall
           <?> "actionTerm"
