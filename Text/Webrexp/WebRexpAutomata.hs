@@ -301,6 +301,8 @@ toAutomata rest@(ConstrainedRef _ _)  free (onTrue, onFalse) =
     (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
 toAutomata rest@DiggLink  free (onTrue, onFalse) =
     (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
+toAutomata rest@DumpLink free (onTrue, onFalse) =
+    (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
 toAutomata rest@NextSibling  free (onTrue, onFalse) =
     (free + 1, free, ((free, AutoState (AutoSimple rest) onTrue onFalse):))
 toAutomata rest@PreviousSibling  free (onTrue, onFalse) =

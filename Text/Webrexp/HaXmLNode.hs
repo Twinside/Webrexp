@@ -63,6 +63,8 @@ instance GraphWalker HaXmLNode ResourcePath where
        (CString _ txt _:_) -> txt
        _ -> ""
 
+    rawAccess = accessResourcePath
+
 pureChildren :: HaXmLNode -> [HaXmLNode]
 pureChildren (CElem (Elem _ _ children) _) = children
 pureChildren _ = []

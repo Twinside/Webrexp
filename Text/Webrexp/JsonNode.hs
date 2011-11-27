@@ -30,6 +30,7 @@ instance PartialGraph JsonNode ResourcePath where
 
 instance GraphWalker JsonNode ResourcePath where
     accessGraph = loadJson
+    rawAccess = accessResourcePath
 
     attribOf attrName (_, JSObject obj) =
         valueOf . none <$> Map.lookup (B.pack attrName) obj

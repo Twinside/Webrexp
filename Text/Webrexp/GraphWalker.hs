@@ -112,6 +112,11 @@ class (GraphPath rezPath, Eq a)
     accessGraph :: (IOMockable m, Functor m, Monad m)
                 => Loggers m -> rezPath -> m (AccessResult a rezPath)
 
+    -- | Same as accessGraph, but don't try to return
+    -- a structured result, only blobs.
+    rawAccess :: (IOMockable m, Functor m, Monad m)
+              => Loggers m -> rezPath -> m (AccessResult a rezPath)
+
     -- | Tell if the history associated is fixed or not.
     -- If the history is not fixed and can change (if you
     -- are querying the filesystem for example, it should

@@ -65,6 +65,8 @@ instance (PartialGraph a ResourcePath, PartialGraph b ResourcePath)
     nameOf (UnionLeft a) = nameOf a
     nameOf (UnionRight a) = nameOf a
 
+    rawAccess = accessResourcePath
+
     childrenOf (UnionLeft a) =
         childrenOf a >>= \c -> return $ UnionLeft <$> c
     childrenOf (UnionRight a) =

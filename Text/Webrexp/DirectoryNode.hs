@@ -98,6 +98,7 @@ instance GraphWalker DirectoryNode ResourcePath where
     indirectLinks (Directory _ _) = []
 
     accessGraph _ _ = return AccessError
+    rawAccess _ _ = return AccessError
 
     isHistoryMutable _ = True
 

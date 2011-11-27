@@ -30,6 +30,7 @@ module Text.Webrexp.WebContext
     -- * Crawling configuration
     , LogLevel (..)
     , setLogLevel 
+    , getUniqueName
     , getUserAgent 
     , setUserAgent 
     , setOutput 
@@ -227,6 +228,7 @@ data Context array node rezPath = Context
     , httpDelay :: Int
     , httpUserAgent :: String
     , defaultOutput :: Handle
+    , uniqueNameCount :: Int
     }
 
 --------------------------------------------------
@@ -286,11 +288,19 @@ emptyContext = Context
     , defaultOutput = stdout
     , uniqueBucket = undefined
     , countBucket = undefined
+    , uniqueNameCount = 1
     }
 
 --------------------------------------------------
 ----            Getter/Setter
 --------------------------------------------------
+
+-- | Return an "pseudo" unique, a filename not used during the
+-- run of the current expression.
+getUniqueName :: (Monad m) => WebContextT array node rezPath m FilePath
+getUniqueName = WebContextT $ \c ->
+    let i = uniqueNameCount c
+    in return ("file_" ++ show i, c { uniqueNameCount = i + 1 })
 
 -- | Setter for the wait time between two indirect
 -- operations.

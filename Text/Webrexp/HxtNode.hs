@@ -43,6 +43,7 @@ instance GraphWalker HxtNode ResourcePath where
     valueOf = valueOfNode
     nameOf = getName
     indirectLinks = hyperNode
+    rawAccess = accessResourcePath
 
 deepValue :: HxtNode -> String
 deepValue (NTree (XText txt) _) = txt

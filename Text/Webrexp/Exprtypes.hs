@@ -222,6 +222,11 @@ data WebRexp =
     -- to follow hyper link
     | DiggLink
 
+    -- | \'->\' operator in the language, used to
+    -- follow hyper link and dump the resulting
+    -- content on hard drive (if permited).
+    | DumpLink
+
     -- | \'+\' operator in the language, used
     -- to select the next sibling node.
     | NextSibling
@@ -281,6 +286,7 @@ foldWebRexp f acc e@(Action _) = f acc e
 foldWebRexp f acc e@(Range _ _) = f acc e
 foldWebRexp f acc e@(Ref _) = f acc e
 foldWebRexp f acc e@DiggLink = f acc e
+foldWebRexp f acc e@DumpLink = f acc e
 foldWebRexp f acc e@NextSibling = f acc e
 foldWebRexp f acc e@PreviousSibling = f acc e
 foldWebRexp f acc e@Parent = f acc e

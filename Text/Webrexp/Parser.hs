@@ -121,6 +121,7 @@ rangeParser = do
 
 webrexpOp :: Parsed st WebRexp
 webrexpOp = (DiggLink <$ string ">>")
+         <|> (DumpLink <$ string "->")
          <|> (PreviousSibling <$ char '~')
          <|> (NextSibling <$ char '+')
          <|> (Parent <$ char '<')

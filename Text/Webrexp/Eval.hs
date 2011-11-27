@@ -20,6 +20,8 @@ import Text.Webrexp.Exprtypes
 import Text.Webrexp.WebContext
 import Text.Webrexp.Eval.Action
 
+import qualified Text.Webrexp.ProjectByteString as B
+
 -- | Given a node search for valid children, check for their
 -- validity against the requirement.
 searchRefIn :: ( GraphWalker node rezPath
@@ -139,6 +141,11 @@ evalWebRexpFor DiggLink e = do
     e' <- diggLinks e
     return (not $ null e', e')
 
+evalWebRexpFor DumpLink e = do
+    debugLog "> ->"
+    dumpLinks e
+    return (True, [])
+
 evalWebRexpFor NextSibling e = do
   debugLog "> '+'"
   subs <- siblingAccessor 1 e 
@@ -214,10 +221,59 @@ diggLinks (Node n) =
     concat <$> sequence
             [ downLinks $ rootRef n <//> indir
                                 | indir <- indirectLinks $ this n ]
+
 diggLinks (Text str) = case importPath str of
         Nothing -> return []
         Just p -> downLinks p
 diggLinks _ = return []
+
+
+dumpLinks :: forall array node rezPath m.
+             ( GraphWalker node rezPath
+             , IOMockable (WebContextT array node rezPath m)
+             , Functor m, Monad m )
+          => EvalState node rezPath -> WebContextT array node rezPath m ()
+dumpLinks (Node n) = mapM_ downLink links
+    where indirs = indirectLinks $ this n
+          links = [ rootRef n <//> indir | indir <- indirs ]
+          downLink lnk = do
+              loggers@(normalLog, _, _) <- prepareLogger
+              down <- (rawAccess :: Loggers (WebContextT array node rezPath m)
+                                 -> rezPath -> WebContextT array node rezPath m 
+                                        (AccessResult node rezPath)) loggers lnk
+              case down of
+                DataBlob _ b -> do
+                    let localized = localizePath lnk
+                    dumpPath <- if not $ null localized
+                        then return localized
+                        else getUniqueName
+
+                    normalLog $ "\nDumping at path \"" ++ dumpPath  ++ "\""
+                    _ <- performIO $ B.writeFile dumpPath b
+                    return ()
+
+                _ -> return ()
+
+dumpLinks (Text str) = case importPath str of
+    Nothing -> return ()
+    Just lnk -> do
+        loggers@(normalLog, _, _) <- prepareLogger
+        down <- (rawAccess :: Loggers (WebContextT array node rezPath m)
+                            -> rezPath -> WebContextT array node rezPath m 
+                                (AccessResult node rezPath)) loggers lnk
+        case down of
+            DataBlob _ b -> do
+                let localized = localizePath lnk
+                dumpPath <- if not $ null localized
+                    then return localized
+                    else getUniqueName
+                normalLog $ "Dumping at path \"" ++ dumpPath  ++ "\""
+                _ <- performIO $ B.writeFile dumpPath b
+                return ()
+
+            _ -> return ()
+
+dumpLinks _ = return ()
 
 -- | Let access sibling nodes with a predefined index.
 siblingAccessor :: ( GraphWalker node rezPath

@@ -5,6 +5,8 @@ module Text.Webrexp.ResourcePath
     ( ResourcePath (..)
     , rezPathToString
     , downloadBinary
+    , accessResourcePath
+    , rawLoadData
     ) where
 
 import Text.Webrexp.GraphWalker
@@ -94,6 +96,30 @@ dumpResourcePath loggers@(logger,_,_) p@(Remote a) = do
   logger $ "Downloading '" ++ show a ++ "' in '" ++ filename
   _ <- performIO . B.writeFile filename $ rspBody rsp
   return ()
+
+accessResourcePath :: (Monad m, IOMockable m, Functor m)
+                   => Loggers m -> ResourcePath -> m (AccessResult a ResourcePath)
+accessResourcePath loggers rpath = maybe AccessError (DataBlob rpath)
+                                <$> rawLoadData loggers rpath
+
+-- | Extract a blob of data from a resourcepath and return
+-- the result.
+rawLoadData :: (Monad m, IOMockable m)
+            => Loggers m -> ResourcePath -> m (Maybe B.ByteString)
+rawLoadData (logger, _errLog, _verbose) (Local s) = do
+    logger $ "Opening file : '" ++ s ++ "'"
+    realFile <- performIO $ doesFileExist s
+    case realFile of
+      Just True -> performIO (B.readFile s)
+      _         -> return Nothing
+
+rawLoadData loggers@(logger, _, _verbose) (Remote uri) = do
+  logger $ "Downloading URL : '" ++ show uri ++ "'"
+  (_u, rsp) <- downloadBinary loggers uri
+  if rspBody rsp == B.empty 
+  	then return Nothing
+  	else return . Just $ rspBody rsp
+
 
 -- | Helper function to grab a resource on internet and returning
 -- it's binary representation, and it's real place if any.
