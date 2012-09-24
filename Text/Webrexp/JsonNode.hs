@@ -1,17 +1,28 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Text.Webrexp.JsonNode( JsonNode ) where
 
 import Control.Arrow
 import Control.Applicative
 import Data.Maybe( catMaybes )
-import qualified Data.Map as Map
+import qualified Data.HashMap.Strict as Map
 import Network.HTTP
 import System.Directory
-import Text.JSON.AttoJSON
+import Data.Aeson( decode
+                 , Value( Object
+                        , Array
+                        , String
+                        , Number
+                        , Bool
+                        , Null)
+                 )
 
+import qualified Data.Text as T
+import qualified Data.Vector as V
 import qualified Text.Webrexp.ProjectByteString as B
+import qualified Data.ByteString.Lazy.Char8 as L
 
 import Text.Webrexp.IOMock
 import Text.Webrexp.GraphWalker
@@ -19,28 +30,29 @@ import Text.Webrexp.ResourcePath
 import Text.Webrexp.UnionNode
 import Text.Webrexp.Remote.MimeTypes
 
-type JsonNode = (Maybe String, JSValue)
+type JsonNode = (Maybe String, Value)
 
 instance PartialGraph JsonNode ResourcePath where
     isResourceParseable _ _ ParseableJson = True
     isResourceParseable _ _ _ = False
 
-    parseResource _ _ ParseableJson binData = return $ (,) Nothing <$> readJSON binData
+    parseResource _ _ ParseableJson binData =
+        return $ (,) Nothing <$> decode (L.fromChunks [binData])
     parseResource _ _ _ _ = error "Wrong kind of parser used"
 
 instance GraphWalker JsonNode ResourcePath where
     accessGraph = loadJson
     rawAccess = accessResourcePath
 
-    attribOf attrName (_, JSObject obj) =
-        valueOf . none <$> Map.lookup (B.pack attrName) obj
+    attribOf attrName (_, Object obj) =
+        valueOf . none <$> Map.lookup (T.pack attrName) obj
             where none a = (Nothing :: Maybe String, a)
     attribOf _ _ = Nothing
 
-    childrenOf (_, JSArray children) =
-        return $ (,) Nothing <$> children
-    childrenOf (_, JSObject obj) =
-        return $ first (Just . B.unpack) <$> Map.assocs obj
+    childrenOf (_, Array children) =
+        return $ (,) Nothing <$> V.toList children
+    childrenOf (_, Object obj) =
+        return $ first (Just . T.unpack) <$> Map.toList obj
     childrenOf _ = return []
 
     nameOf (Just s, _) = Just s
@@ -52,20 +64,20 @@ instance GraphWalker JsonNode ResourcePath where
 
     isHistoryMutable _ = False
 
-    valueOf (_, JSString s) = B.unpack s
-    valueOf (_, JSNumber i) = show i
-    valueOf (_, JSBool b) = show b
-    valueOf (_, JSArray _) = ""
-    valueOf (_, JSObject _) = ""
-    valueOf (_, JSNull) = ""
+    valueOf (_, String s) = T.unpack s
+    valueOf (_, Number i) = show i
+    valueOf (_, Bool b) = show b
+    valueOf (_, Array _) = ""
+    valueOf (_, Object _) = ""
+    valueOf (_, Null) = ""
 
 parseJson :: (Monad m) => Loggers m -> ResourcePath -> B.ByteString
           -> m (AccessResult JsonNode ResourcePath)
 parseJson (_, errLog, _) datapath file =
-    case parseJSON file of
-      Left err -> do errLog $ "> JSON Parsing error " ++ err
-       	             return AccessError
-      Right valid -> return $ Result datapath (Nothing, valid)
+    case decode $ L.fromChunks [file] of
+      Nothing    -> do errLog "> JSON Parsing error"
+                       return AccessError
+      Just valid -> return $ Result datapath (Nothing, valid)
 
 -- | Given a resource path, do the required loading
 loadJson :: (IOMockable m, Monad m)

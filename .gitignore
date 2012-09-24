@@ -6,3 +6,4 @@ dist
 *.exe
 *.pdf
 tags
+cabal-dev
