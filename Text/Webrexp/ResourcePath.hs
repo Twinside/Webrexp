@@ -63,12 +63,16 @@ combinePath (Remote a) (Remote b) =
                    -- Remote a
          Just c -> Remote c
 
-combinePath (Remote a) (Local b)
-    | isRelativeReference b = case parseRelativeReference b of
+combinePath (Remote a) (Local b) =
+    case parseRelativeReference $ substSlash b of
         Just r -> Remote . fromJust $ r `relativeTo` a
         Nothing -> error "Not possible, checked before"
 combinePath (Local _) b@(Remote _) = b
-combinePath _ _ = error "Mixing local/remote path"
+
+substSlash :: String -> String
+substSlash [] = []
+substSlash ('\\':xs) = '/' : substSlash xs
+substSlash (x:xs) = x : substSlash xs
 
 extractFileName :: ResourcePath -> String
 extractFileName (Remote a) = snd . splitFileName $ uriPath a
