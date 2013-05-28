@@ -12,10 +12,14 @@ module Text.Webrexp.ResourcePath
 import Text.Webrexp.GraphWalker
 import Text.Webrexp.IOMock
 import Control.Applicative
-import Data.Maybe
 import Network.HTTP
 import Network.Browser
-import Network.URI
+import Network.URI( URI
+                  , relativeTo
+                  , isRelativeReference
+                  , parseRelativeReference
+                  , uriPath
+                  , parseURI )
 import System.Directory
 import System.FilePath
 import qualified Text.Webrexp.ProjectByteString as B
@@ -56,16 +60,10 @@ toRezPath s = case (parseURI s, isValid s, isRelativeReference s) of
 -- but also handle URI.
 combinePath :: ResourcePath -> ResourcePath -> ResourcePath
 combinePath (Local a) (Local b) = Local . normalise $ dropFileName a </> b
-combinePath (Remote a) (Remote b) =
-    case b `relativeTo` a of
-         -- TODO : find another way for this
-         Nothing -> error "Can't merge resourcepath" 
-                   -- Remote a
-         Just c -> Remote c
-
+combinePath (Remote a) (Remote b) = Remote $ b `relativeTo` a
 combinePath (Remote a) (Local b) =
     case parseRelativeReference $ substSlash b of
-        Just r -> Remote . fromJust $ r `relativeTo` a
+        Just r -> Remote $ r `relativeTo` a
         Nothing -> error "Not possible, checked before"
 combinePath (Local _) b@(Remote _) = b
 
