@@ -1,5 +1,5 @@
 Name:       Webrexp
-Version:    1.1.1
+Version:    1.1.2
 Synopsis:   Regexp-like engine to scrap web data
 Build-Type: Simple
 License:    BSD3
@@ -8,6 +8,15 @@ Description: A web scrapping utility mixing CSS selector syntax and regular expr
 Category:    Utility
 Author: Vincent Berthoux
 Maintainer: Vincent Berthoux (twinside@gmail.com)
+
+Source-Repository head
+    Type:      git
+    Location:  git@github.com:Twinside/Webrexp.git
+
+Source-Repository this
+    Type:      git
+    Location:  git@github.com:Twinside/Webrexp.git
+    Tag:       v1.1.2
 
 Flag optimize
     Description: turn on optimisation
@@ -59,6 +68,7 @@ Library
             Text.Webrexp.Eval.ActionFunc
             Text.Webrexp.HaXmlNode
             Text.Webrexp.HxtNode
+            Text.Webrexp.IOMock
             Text.Webrexp.JsonNode
             Text.Webrexp.ProjectByteString
             Text.Webrexp.Remote.MimeTypes
